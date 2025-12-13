@@ -17,6 +17,9 @@ export interface CampaignDraft {
   // Schedule
   sendNow: boolean;
   scheduledAt: Date | null;
+  // A/B Testing
+  enableABTest: boolean;
+  abTestId: string | null;
 }
 
 interface CampaignStore {
@@ -50,6 +53,8 @@ const initialDraft: CampaignDraft = {
   listIds: [],
   sendNow: true,
   scheduledAt: null,
+  enableABTest: false,
+  abTestId: null,
 };
 
 export const useCampaignStore = create<CampaignStore>((set, get) => ({
