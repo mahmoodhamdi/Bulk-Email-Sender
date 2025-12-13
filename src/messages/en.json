@@ -548,5 +548,32 @@
     "testComplete": "Test duration complete",
     "enableABTest": "Enable A/B Testing",
     "enableABTestDesc": "Test different versions to find what works best"
+  },
+  "segmentation": {
+    "title": "Segments",
+    "subtitle": "Create targeted audience segments",
+    "newSegment": "New Segment",
+    "segmentName": "Segment Name",
+    "segmentNamePlaceholder": "e.g., Active Subscribers",
+    "description": "Description",
+    "descriptionPlaceholder": "Describe this segment...",
+    "conditionGroup": "Condition Group",
+    "addCondition": "Add Condition",
+    "addGroup": "Add Condition Group",
+    "preview": "Preview",
+    "refreshPreview": "Refresh",
+    "contactsMatch": "contacts match this segment",
+    "more": "more",
+    "noSegments": "No segments yet",
+    "noSegmentsDesc": "Create your first segment to target specific audiences",
+    "groups": "groups",
+    "conditions": "conditions",
+    "contacts": "contacts",
+    "created": "Created",
+    "days": "days",
+    "enterValue": "Enter value...",
+    "selectSegment": "Select a Segment",
+    "selectSegmentDesc": "Choose an existing segment or create a new one",
+    "useSegment": "Use Segment"
   }
 }

@@ -250,9 +250,9 @@
 - [x] CSV import
 
 ### Phase 2 - Q1 2025
-- [ ] Drag & drop email builder
-- [ ] A/B testing
-- [ ] Advanced segmentation
+- [x] Drag & drop email builder ✅
+- [x] A/B testing ✅
+- [ ] Advanced segmentation (in progress)
 - [ ] Scheduled campaigns
 - [ ] Email validation API
 - [ ] Webhooks
