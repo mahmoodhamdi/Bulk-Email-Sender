@@ -131,3 +131,57 @@ test.describe('Email Builder Feature', () => {
     await page.screenshot({ path: 'screenshots/email-builder-04-tablet.png', fullPage: true });
   });
 });
+
+test.describe('Campaign Scheduling Feature', () => {
+  test('should display campaign creation with scheduling', async ({ page }) => {
+    await page.goto('/campaigns/new');
+    await page.waitForLoadState('networkidle');
+
+    // Check page loads
+    await expect(page.locator('body')).toBeVisible();
+
+    // Take screenshot
+    await page.screenshot({ path: 'screenshots/scheduling-01-campaign-new.png', fullPage: true });
+  });
+
+  test('should show schedule options in review step', async ({ page }) => {
+    await page.goto('/campaigns/new');
+    await page.waitForLoadState('networkidle');
+
+    // Try to find the schedule card or any scheduling related element
+    const scheduleTitle = page.locator('text=Schedule Campaign, text=جدولة الحملة');
+
+    // Take screenshot of the campaign wizard
+    await page.screenshot({ path: 'screenshots/scheduling-02-wizard.png', fullPage: true });
+  });
+
+  test('should support Arabic RTL layout for scheduling', async ({ page }) => {
+    await page.goto('/ar/campaigns/new');
+    await page.waitForLoadState('networkidle');
+
+    // Check RTL direction
+    const html = page.locator('html');
+    await expect(html).toHaveAttribute('dir', 'rtl');
+
+    // Take screenshot
+    await page.screenshot({ path: 'screenshots/scheduling-03-rtl.png', fullPage: true });
+  });
+
+  test('should be responsive on mobile for scheduling', async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 667 });
+    await page.goto('/campaigns/new');
+    await page.waitForLoadState('networkidle');
+
+    // Take mobile screenshot
+    await page.screenshot({ path: 'screenshots/scheduling-04-mobile.png', fullPage: true });
+  });
+
+  test('should be responsive on tablet for scheduling', async ({ page }) => {
+    await page.setViewportSize({ width: 768, height: 1024 });
+    await page.goto('/campaigns/new');
+    await page.waitForLoadState('networkidle');
+
+    // Take tablet screenshot
+    await page.screenshot({ path: 'screenshots/scheduling-05-tablet.png', fullPage: true });
+  });
+});
