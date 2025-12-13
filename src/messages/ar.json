@@ -548,5 +548,32 @@
     "testComplete": "انتهت مدة الاختبار",
     "enableABTest": "تفعيل اختبار A/B",
     "enableABTestDesc": "اختبر نسخ مختلفة لمعرفة ما يعمل بشكل أفضل"
+  },
+  "segmentation": {
+    "title": "الشرائح",
+    "subtitle": "إنشاء شرائح جمهور مستهدفة",
+    "newSegment": "شريحة جديدة",
+    "segmentName": "اسم الشريحة",
+    "segmentNamePlaceholder": "مثال: المشتركين النشطين",
+    "description": "الوصف",
+    "descriptionPlaceholder": "وصف هذه الشريحة...",
+    "conditionGroup": "مجموعة الشروط",
+    "addCondition": "إضافة شرط",
+    "addGroup": "إضافة مجموعة شروط",
+    "preview": "معاينة",
+    "refreshPreview": "تحديث",
+    "contactsMatch": "جهة اتصال تطابق هذه الشريحة",
+    "more": "المزيد",
+    "noSegments": "لا توجد شرائح",
+    "noSegmentsDesc": "أنشئ أول شريحة لاستهداف جماهير محددة",
+    "groups": "مجموعات",
+    "conditions": "شروط",
+    "contacts": "جهات اتصال",
+    "created": "تاريخ الإنشاء",
+    "days": "أيام",
+    "enterValue": "أدخل القيمة...",
+    "selectSegment": "اختر شريحة",
+    "selectSegmentDesc": "اختر شريحة موجودة أو أنشئ واحدة جديدة",
+    "useSegment": "استخدام الشريحة"
   }
 }
