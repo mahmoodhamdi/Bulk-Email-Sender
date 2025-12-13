@@ -4,7 +4,7 @@ import * as React from 'react';
 import { useTranslations } from 'next-intl';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, ArrowRight, Check, Send, Palette, Code, FlaskConical } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Check, Send, Palette, Code, FlaskConical, Users, List, Filter } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -17,6 +17,8 @@ import {
 } from '@/components/ui/card';
 import { PageLayout } from '@/components/layout/PageLayout';
 import { useCampaignStore, type CampaignDraft } from '@/stores/campaign-store';
+import { useSegmentationStore } from '@/stores/segmentation-store';
+import { SegmentList } from '@/components/segmentation/SegmentList';
 import { cn } from '@/lib/utils';
 
 const STEPS = ['setup', 'content', 'recipients', 'review'] as const;
@@ -472,6 +474,9 @@ function RecipientsStep({
   updateDraft: (data: Partial<CampaignDraft>) => void;
   t: ReturnType<typeof useTranslations>;
 }) {
+  const { segments } = useSegmentationStore();
+  const selectedSegment = segments.find((s) => s.id === draft.segmentId);
+
   const handlePasteEmails = (text: string) => {
     const emails = text
       .split(/[\n,;]/)
@@ -484,66 +489,177 @@ function RecipientsStep({
     updateDraft({ recipients: draft.recipients.filter((e) => e !== email) });
   };
 
+  const recipientSources = [
+    { id: 'manual' as const, icon: Users, label: t('campaign.recipients.manualEntry') },
+    { id: 'segment' as const, icon: Filter, label: t('campaign.recipients.fromSegment') },
+    { id: 'list' as const, icon: List, label: t('campaign.recipients.fromList') },
+  ];
+
   return (
     <Card>
       <CardHeader>
         <CardTitle>{t('campaign.recipients.title')}</CardTitle>
         <CardDescription>
-          {t('campaign.recipients.totalRecipients')}: {draft.recipients.length}
+          {t('campaign.recipients.selectSource')}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
-        {/* Paste Emails */}
-        <div className="space-y-2">
-          <Label>{t('campaign.recipients.pasteEmails')}</Label>
-          <textarea
-            className={cn(
-              'min-h-[120px] w-full rounded-md border bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring',
-              errors.recipients ? 'border-red-500' : 'border-input'
-            )}
-            placeholder={t('campaign.recipients.pasteEmailsPlaceholder')}
-            onBlur={(e) => {
-              if (e.target.value) {
-                handlePasteEmails(e.target.value);
-                e.target.value = '';
-              }
-            }}
-          />
-          {errors.recipients && (
-            <p className="text-sm text-red-500">{errors.recipients}</p>
-          )}
+        {/* Recipient Source Selector */}
+        <div className="grid gap-3 sm:grid-cols-3">
+          {recipientSources.map(({ id, icon: Icon, label }) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => updateDraft({
+                recipientSource: id,
+                segmentId: id === 'segment' ? draft.segmentId : null,
+              })}
+              className={cn(
+                'flex flex-col items-center gap-2 rounded-lg border p-4 transition-colors',
+                draft.recipientSource === id
+                  ? 'border-primary bg-primary/5'
+                  : 'border-muted hover:border-muted-foreground/50'
+              )}
+            >
+              <Icon className={cn(
+                'h-6 w-6',
+                draft.recipientSource === id ? 'text-primary' : 'text-muted-foreground'
+              )} />
+              <span className={cn(
+                'text-sm font-medium',
+                draft.recipientSource === id ? 'text-primary' : 'text-muted-foreground'
+              )}>
+                {label}
+              </span>
+            </button>
+          ))}
         </div>
 
-        {/* Recipients List */}
-        {draft.recipients.length > 0 && (
-          <div className="space-y-2">
-            <Label>
-              {t('campaign.recipients.totalRecipients')}: {draft.recipients.length}
-            </Label>
-            <div className="max-h-48 overflow-y-auto rounded-md border p-2">
-              <div className="flex flex-wrap gap-2">
-                {draft.recipients.map((email) => (
-                  <span
-                    key={email}
-                    className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-3 py-1 text-sm"
-                  >
-                    {email}
-                    <button
-                      onClick={() => removeRecipient(email)}
-                      className="ml-1 text-muted-foreground hover:text-foreground"
-                    >
-                      ×
-                    </button>
-                  </span>
-                ))}
-              </div>
+        {errors.recipients && (
+          <p className="text-sm text-red-500">{errors.recipients}</p>
+        )}
+
+        {/* Manual Entry */}
+        {draft.recipientSource === 'manual' && (
+          <>
+            <div className="space-y-2">
+              <Label>{t('campaign.recipients.pasteEmails')}</Label>
+              <textarea
+                className={cn(
+                  'min-h-[120px] w-full rounded-md border bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring',
+                  errors.recipients ? 'border-red-500' : 'border-input'
+                )}
+                placeholder={t('campaign.recipients.pasteEmailsPlaceholder')}
+                onBlur={(e) => {
+                  if (e.target.value) {
+                    handlePasteEmails(e.target.value);
+                    e.target.value = '';
+                  }
+                }}
+              />
             </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => updateDraft({ recipients: [] })}
-            >
-              {t('common.clear')}
+
+            {draft.recipients.length > 0 && (
+              <div className="space-y-2">
+                <Label>
+                  {t('campaign.recipients.totalRecipients')}: {draft.recipients.length}
+                </Label>
+                <div className="max-h-48 overflow-y-auto rounded-md border p-2">
+                  <div className="flex flex-wrap gap-2">
+                    {draft.recipients.map((email) => (
+                      <span
+                        key={email}
+                        className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-3 py-1 text-sm"
+                      >
+                        {email}
+                        <button
+                          onClick={() => removeRecipient(email)}
+                          className="ml-1 text-muted-foreground hover:text-foreground"
+                        >
+                          ×
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => updateDraft({ recipients: [] })}
+                >
+                  {t('common.clear')}
+                </Button>
+              </div>
+            )}
+          </>
+        )}
+
+        {/* Segment Selection */}
+        {draft.recipientSource === 'segment' && (
+          <div className="space-y-4">
+            {segments.length === 0 ? (
+              <div className="rounded-lg border-2 border-dashed border-muted-foreground/30 p-8 text-center">
+                <Filter className="mx-auto h-12 w-12 text-muted-foreground/50 mb-4" />
+                <h3 className="text-lg font-semibold mb-2">
+                  {t('campaign.recipients.noSegments')}
+                </h3>
+                <p className="text-sm text-muted-foreground mb-4">
+                  {t('campaign.recipients.noSegmentsDesc')}
+                </p>
+                <Button asChild>
+                  <Link href="/contacts/segments">
+                    <Filter className="mr-2 h-4 w-4" />
+                    {t('campaign.recipients.createSegment')}
+                  </Link>
+                </Button>
+              </div>
+            ) : (
+              <>
+                <Label>{t('campaign.recipients.selectSegment')}</Label>
+                <SegmentList
+                  selectable
+                  selectedId={draft.segmentId || undefined}
+                  onSelect={(segment) => updateDraft({ segmentId: segment.id })}
+                />
+                {selectedSegment && (
+                  <div className="rounded-lg bg-primary/5 border border-primary/20 p-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="font-medium">{selectedSegment.name}</p>
+                        <p className="text-sm text-muted-foreground">
+                          {selectedSegment.contactCount} {t('segmentation.contacts')}
+                        </p>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => updateDraft({ segmentId: null })}
+                      >
+                        {t('common.clear')}
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        )}
+
+        {/* Contact List Selection (placeholder for future) */}
+        {draft.recipientSource === 'list' && (
+          <div className="rounded-lg border-2 border-dashed border-muted-foreground/30 p-8 text-center">
+            <List className="mx-auto h-12 w-12 text-muted-foreground/50 mb-4" />
+            <h3 className="text-lg font-semibold mb-2">
+              {t('campaign.recipients.selectFromLists')}
+            </h3>
+            <p className="text-sm text-muted-foreground mb-4">
+              {t('campaign.recipients.selectFromListsDesc')}
+            </p>
+            <Button asChild>
+              <Link href="/contacts">
+                <List className="mr-2 h-4 w-4" />
+                {t('campaign.recipients.manageLists')}
+              </Link>
             </Button>
           </div>
         )}

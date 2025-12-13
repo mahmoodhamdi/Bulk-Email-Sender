@@ -189,7 +189,17 @@
       "duplicatesRemoved": "تم إزالة {count} مكررات",
       "invalidEmails": "{count} إيميلات غير صالحة",
       "excludeUnsubscribed": "استبعاد الملغي اشتراكهم",
-      "excludeBounced": "استبعاد المرتدة"
+      "excludeBounced": "استبعاد المرتدة",
+      "selectSource": "اختر طريقة إضافة المستلمين لحملتك",
+      "fromSegment": "من شريحة",
+      "fromList": "من قائمة",
+      "noSegments": "لا توجد شرائح",
+      "noSegmentsDesc": "أنشئ شريحة لاستهداف جهات اتصال محددة بناءً على خصائصها",
+      "createSegment": "إنشاء شريحة",
+      "selectSegment": "اختر شريحة",
+      "selectFromLists": "اختر من قوائم جهات الاتصال",
+      "selectFromListsDesc": "اختر قوائم جهات الاتصال لإرسال حملتك إليها",
+      "manageLists": "إدارة القوائم"
     },
     "review": {
       "title": "المراجعة والإرسال",
