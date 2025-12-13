@@ -4,7 +4,7 @@ import * as React from 'react';
 import { useTranslations } from 'next-intl';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, ArrowRight, Check, Send, Palette, Code, FlaskConical, Users, List, Filter } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Check, Send, Palette, Code, FlaskConical, Users, List, Filter, Calendar } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -18,7 +18,9 @@ import {
 import { PageLayout } from '@/components/layout/PageLayout';
 import { useCampaignStore, type CampaignDraft } from '@/stores/campaign-store';
 import { useSegmentationStore } from '@/stores/segmentation-store';
+import { useScheduleStore, formatScheduledDate, getTimeUntil } from '@/stores/schedule-store';
 import { SegmentList } from '@/components/segmentation/SegmentList';
+import { ScheduleSelector, ScheduleSummary } from '@/components/campaign/ScheduleSelector';
 import { cn } from '@/lib/utils';
 
 const STEPS = ['setup', 'content', 'recipients', 'review'] as const;
@@ -676,86 +678,139 @@ function ReviewStep({
   draft: CampaignDraft;
   t: ReturnType<typeof useTranslations>;
 }) {
+  const { segments } = useSegmentationStore();
+  const selectedSegment = segments.find((s) => s.id === draft.segmentId);
+
+  // Calculate recipient count based on source
+  const getRecipientCount = () => {
+    if (draft.recipientSource === 'segment' && selectedSegment) {
+      return selectedSegment.contactCount;
+    }
+    if (draft.recipientSource === 'list' && draft.listIds.length > 0) {
+      // Placeholder for list contact count
+      return draft.listIds.length * 100; // Mock number
+    }
+    return draft.recipients.length;
+  };
+
+  const recipientCount = getRecipientCount();
+
+  // Get recipient source description
+  const getRecipientSourceDesc = () => {
+    if (draft.recipientSource === 'segment' && selectedSegment) {
+      return `${t('campaign.recipients.fromSegment')}: ${selectedSegment.name}`;
+    }
+    if (draft.recipientSource === 'list') {
+      return `${t('campaign.recipients.fromList')}: ${draft.listIds.length} ${t('contacts.lists.title').toLowerCase()}`;
+    }
+    return t('campaign.recipients.manualEntry');
+  };
+
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>{t('campaign.review.title')}</CardTitle>
-        <CardDescription>{t('campaign.review.summary')}</CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-6">
-        {/* Campaign Details */}
-        <div className="rounded-lg border p-4">
-          <h3 className="mb-4 font-semibold">
-            {t('campaign.review.campaignDetails')}
-          </h3>
-          <dl className="grid gap-2 text-sm">
-            <div className="flex justify-between">
-              <dt className="text-muted-foreground">
-                {t('campaign.setup.campaignName')}:
-              </dt>
-              <dd className="font-medium">{draft.name}</dd>
-            </div>
-            <div className="flex justify-between">
-              <dt className="text-muted-foreground">
-                {t('campaign.setup.subject')}:
-              </dt>
-              <dd className="font-medium">{draft.subject}</dd>
-            </div>
-            <div className="flex justify-between">
-              <dt className="text-muted-foreground">
-                {t('campaign.setup.fromName')}:
-              </dt>
-              <dd className="font-medium">{draft.fromName}</dd>
-            </div>
-            <div className="flex justify-between">
-              <dt className="text-muted-foreground">
-                {t('campaign.setup.fromEmail')}:
-              </dt>
-              <dd className="font-medium">{draft.fromEmail}</dd>
-            </div>
-          </dl>
-        </div>
-
-        {/* Recipients Summary */}
-        <div className="rounded-lg border p-4">
-          <h3 className="mb-4 font-semibold">
-            {t('campaign.review.recipientsSummary')}
-          </h3>
-          <p className="text-2xl font-bold text-primary">
-            {draft.recipients.length}
-          </p>
-          <p className="text-sm text-muted-foreground">
-            {t('campaigns.stats.recipients')}
-          </p>
-        </div>
-
-        {/* Content Preview */}
-        <div className="rounded-lg border p-4">
-          <h3 className="mb-4 font-semibold">
-            {t('campaign.review.contentPreview')}
-          </h3>
-          <div className="max-h-48 overflow-y-auto rounded-md bg-muted p-4">
-            <div
-              dangerouslySetInnerHTML={{
-                __html: draft.content
-                  .replace(/\{\{firstName\}\}/g, 'John')
-                  .replace(/\{\{lastName\}\}/g, 'Doe')
-                  .replace(/\{\{email\}\}/g, 'john@example.com')
-                  .substring(0, 500) + '...',
-              }}
-            />
+    <div className="space-y-6">
+      <Card>
+        <CardHeader>
+          <CardTitle>{t('campaign.review.title')}</CardTitle>
+          <CardDescription>{t('campaign.review.summary')}</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          {/* Campaign Details */}
+          <div className="rounded-lg border p-4">
+            <h3 className="mb-4 font-semibold">
+              {t('campaign.review.campaignDetails')}
+            </h3>
+            <dl className="grid gap-2 text-sm">
+              <div className="flex justify-between">
+                <dt className="text-muted-foreground">
+                  {t('campaign.setup.campaignName')}:
+                </dt>
+                <dd className="font-medium">{draft.name}</dd>
+              </div>
+              <div className="flex justify-between">
+                <dt className="text-muted-foreground">
+                  {t('campaign.setup.subject')}:
+                </dt>
+                <dd className="font-medium">{draft.subject}</dd>
+              </div>
+              <div className="flex justify-between">
+                <dt className="text-muted-foreground">
+                  {t('campaign.setup.fromName')}:
+                </dt>
+                <dd className="font-medium">{draft.fromName}</dd>
+              </div>
+              <div className="flex justify-between">
+                <dt className="text-muted-foreground">
+                  {t('campaign.setup.fromEmail')}:
+                </dt>
+                <dd className="font-medium">{draft.fromEmail}</dd>
+              </div>
+              {draft.enableABTest && (
+                <div className="flex justify-between">
+                  <dt className="text-muted-foreground">
+                    {t('abTest.title')}:
+                  </dt>
+                  <dd className="font-medium text-primary">
+                    {t('common.yes')}
+                  </dd>
+                </div>
+              )}
+            </dl>
           </div>
-        </div>
 
-        {/* Confirmation */}
-        <div className="rounded-lg border border-yellow-500/50 bg-yellow-500/10 p-4">
-          <p className="text-sm">
-            {t('campaign.review.confirmSendMessage', {
-              count: draft.recipients.length,
-            })}
-          </p>
-        </div>
-      </CardContent>
-    </Card>
+          {/* Recipients Summary */}
+          <div className="rounded-lg border p-4">
+            <h3 className="mb-4 font-semibold">
+              {t('campaign.review.recipientsSummary')}
+            </h3>
+            <p className="text-2xl font-bold text-primary">
+              {recipientCount}
+            </p>
+            <p className="text-sm text-muted-foreground">
+              {getRecipientSourceDesc()}
+            </p>
+          </div>
+
+          {/* Content Preview */}
+          <div className="rounded-lg border p-4">
+            <h3 className="mb-4 font-semibold">
+              {t('campaign.review.contentPreview')}
+            </h3>
+            <div className="max-h-48 overflow-y-auto rounded-md bg-muted p-4">
+              <div
+                dangerouslySetInnerHTML={{
+                  __html: draft.content
+                    .replace(/\{\{firstName\}\}/g, 'John')
+                    .replace(/\{\{lastName\}\}/g, 'Doe')
+                    .replace(/\{\{email\}\}/g, 'john@example.com')
+                    .substring(0, 500) + '...',
+                }}
+              />
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Schedule Selector */}
+      <ScheduleSelector />
+
+      {/* Confirmation */}
+      <Card>
+        <CardContent className="pt-6">
+          <div className="rounded-lg border border-yellow-500/50 bg-yellow-500/10 p-4">
+            <div className="flex items-start gap-3">
+              <Calendar className="h-5 w-5 text-yellow-600 mt-0.5" />
+              <div>
+                <p className="text-sm font-medium mb-1">
+                  {t('campaign.review.confirmSendMessage', {
+                    count: recipientCount,
+                  })}
+                </p>
+                <ScheduleSummary className="mt-2" />
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
   );
 }
