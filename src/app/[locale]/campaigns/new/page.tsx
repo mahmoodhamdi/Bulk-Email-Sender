@@ -4,7 +4,7 @@ import * as React from 'react';
 import { useTranslations } from 'next-intl';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, ArrowRight, Check, Send, Palette, Code } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Check, Send, Palette, Code, FlaskConical } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -267,6 +267,50 @@ function SetupStep({
           <p className="text-sm text-muted-foreground">
             {t('campaign.setup.replyToHint')}
           </p>
+        </div>
+
+        {/* A/B Testing Toggle */}
+        <div className="rounded-lg border p-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
+                <FlaskConical className="h-5 w-5 text-primary" />
+              </div>
+              <div>
+                <Label className="text-base font-medium">
+                  {t('abTest.enableABTest')}
+                </Label>
+                <p className="text-sm text-muted-foreground">
+                  {t('abTest.enableABTestDesc')}
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => updateDraft({ enableABTest: !draft.enableABTest })}
+              className={cn(
+                'relative h-6 w-11 rounded-full transition-colors',
+                draft.enableABTest ? 'bg-primary' : 'bg-muted'
+              )}
+            >
+              <span
+                className={cn(
+                  'absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white transition-transform shadow-sm',
+                  draft.enableABTest && 'translate-x-5'
+                )}
+              />
+            </button>
+          </div>
+          {draft.enableABTest && (
+            <div className="mt-4 pt-4 border-t">
+              <Button variant="outline" size="sm" asChild>
+                <Link href={`/campaigns/new/ab-test`}>
+                  <FlaskConical className="mr-2 h-4 w-4" />
+                  {t('abTest.settings')}
+                </Link>
+              </Button>
+            </div>
+          )}
         </div>
       </CardContent>
     </Card>
