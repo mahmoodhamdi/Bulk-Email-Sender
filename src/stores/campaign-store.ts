@@ -14,6 +14,8 @@ export interface CampaignDraft {
   // Recipients
   recipients: string[];
   listIds: string[];
+  segmentId: string | null;
+  recipientSource: 'manual' | 'list' | 'segment';
   // Schedule
   sendNow: boolean;
   scheduledAt: Date | null;
@@ -51,6 +53,8 @@ const initialDraft: CampaignDraft = {
   templateId: null,
   recipients: [],
   listIds: [],
+  segmentId: null,
+  recipientSource: 'manual',
   sendNow: true,
   scheduledAt: null,
   enableABTest: false,
@@ -130,7 +134,11 @@ export const useCampaignStore = create<CampaignStore>((set, get) => ({
       }
     } else if (step === 2) {
       // Recipients validation
-      if (draft.recipients.length === 0 && draft.listIds.length === 0) {
+      const hasManualRecipients = draft.recipients.length > 0;
+      const hasListRecipients = draft.listIds.length > 0;
+      const hasSegmentRecipients = draft.segmentId !== null;
+
+      if (!hasManualRecipients && !hasListRecipients && !hasSegmentRecipients) {
         setError('recipients', 'At least one recipient is required');
         isValid = false;
       }

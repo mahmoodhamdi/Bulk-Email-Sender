@@ -176,11 +176,14 @@
     },
     "recipients": {
       "title": "Recipients",
+      "selectSource": "Choose how to add recipients to your campaign",
       "totalRecipients": "Total Recipients",
       "addRecipients": "Add Recipients",
       "importCsv": "Import from CSV",
       "selectList": "Select Contact List",
       "manualEntry": "Manual Entry",
+      "fromSegment": "From Segment",
+      "fromList": "From List",
       "pasteEmails": "Paste Emails",
       "pasteEmailsPlaceholder": "Paste emails (one per line)",
       "validateEmails": "Validate Emails",
@@ -189,7 +192,14 @@
       "duplicatesRemoved": "{count} duplicates removed",
       "invalidEmails": "{count} invalid emails",
       "excludeUnsubscribed": "Exclude unsubscribed",
-      "excludeBounced": "Exclude bounced"
+      "excludeBounced": "Exclude bounced",
+      "noSegments": "No Segments Created",
+      "noSegmentsDesc": "Create a segment to target specific contacts based on their attributes",
+      "createSegment": "Create Segment",
+      "selectSegment": "Select a Segment",
+      "selectFromLists": "Select from Contact Lists",
+      "selectFromListsDesc": "Choose contact lists to send your campaign to",
+      "manageLists": "Manage Lists"
     },
     "review": {
       "title": "Review & Send",
