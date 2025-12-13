@@ -151,6 +151,12 @@
       "previewMobile": "الجوال",
       "mergeTags": "المتغيرات",
       "mergeTagsHint": "انقر لإدراج تخصيص",
+      "visualBuilder": "المحرر المرئي",
+      "codeEditor": "محرر الكود",
+      "dragDropBuilder": "منشئ البريد بالسحب والإفلات",
+      "dragDropBuilderDesc": "أنشئ رسائل بريد جميلة باستخدام المحرر المرئي. اسحب العناصر لتصميم بريدك بدون كتابة كود.",
+      "openBuilder": "فتح منشئ البريد",
+      "contentLoaded": "تم تحميل المحتوى من المنشئ",
       "availableTags": {
         "firstName": "الاسم الأول",
         "lastName": "الاسم الأخير",

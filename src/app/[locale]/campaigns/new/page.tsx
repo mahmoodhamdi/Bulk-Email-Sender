@@ -1,0 +1,601 @@
+'use client';
+
+import * as React from 'react';
+import { useTranslations } from 'next-intl';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { ArrowLeft, ArrowRight, Check, Send, Palette, Code } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
+import { PageLayout } from '@/components/layout/PageLayout';
+import { useCampaignStore, type CampaignDraft } from '@/stores/campaign-store';
+import { cn } from '@/lib/utils';
+
+const STEPS = ['setup', 'content', 'recipients', 'review'] as const;
+
+export default function NewCampaignPage() {
+  const t = useTranslations();
+  const router = useRouter();
+  const {
+    currentStep,
+    draft,
+    errors,
+    updateDraft,
+    nextStep,
+    prevStep,
+    setStep,
+    resetDraft,
+  } = useCampaignStore();
+
+  const handleSaveDraft = () => {
+    // TODO: Save to database
+    alert(t('campaign.actions.saveDraft') + ' - ' + draft.name);
+  };
+
+  const handleSendCampaign = () => {
+    // TODO: Send campaign
+    alert(t('campaign.review.sent'));
+    resetDraft();
+    router.push('/campaigns');
+  };
+
+  return (
+    <PageLayout
+      title={t('campaign.create.title')}
+      subtitle={t('campaign.create.subtitle')}
+      actions={
+        <Button variant="outline" asChild>
+          <Link href="/campaigns">
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            {t('common.back')}
+          </Link>
+        </Button>
+      }
+    >
+      {/* Steps Indicator */}
+      <div className="mb-8">
+        <div className="flex items-center justify-center gap-2 sm:gap-4">
+          {STEPS.map((step, index) => (
+            <div key={step} className="flex items-center">
+              <button
+                onClick={() => index < currentStep && setStep(index)}
+                disabled={index > currentStep}
+                className={cn(
+                  'flex h-8 w-8 items-center justify-center rounded-full text-sm font-medium transition-colors',
+                  index < currentStep
+                    ? 'bg-green-500 text-white cursor-pointer hover:bg-green-600'
+                    : index === currentStep
+                    ? 'bg-primary text-primary-foreground'
+                    : 'bg-muted text-muted-foreground cursor-not-allowed'
+                )}
+              >
+                {index < currentStep ? (
+                  <Check className="h-4 w-4" />
+                ) : (
+                  index + 1
+                )}
+              </button>
+              <span className="ml-2 hidden text-sm font-medium sm:inline">
+                {t(`campaign.steps.${step}`)}
+              </span>
+              {index < STEPS.length - 1 && (
+                <div
+                  className={cn(
+                    'mx-2 h-px w-8 sm:mx-4 sm:w-12',
+                    index < currentStep ? 'bg-green-500' : 'bg-muted'
+                  )}
+                />
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Step Content */}
+      <div className="mx-auto max-w-2xl">
+        {currentStep === 0 && (
+          <SetupStep
+            draft={draft}
+            errors={errors}
+            updateDraft={updateDraft}
+            t={t}
+          />
+        )}
+        {currentStep === 1 && (
+          <ContentStep
+            draft={draft}
+            errors={errors}
+            updateDraft={updateDraft}
+            t={t}
+          />
+        )}
+        {currentStep === 2 && (
+          <RecipientsStep
+            draft={draft}
+            errors={errors}
+            updateDraft={updateDraft}
+            t={t}
+          />
+        )}
+        {currentStep === 3 && <ReviewStep draft={draft} t={t} />}
+
+        {/* Navigation Buttons */}
+        <div className="mt-6 flex justify-between gap-4">
+          <div>
+            {currentStep > 0 && (
+              <Button variant="outline" onClick={prevStep}>
+                <ArrowLeft className="mr-2 h-4 w-4" />
+                {t('common.previous')}
+              </Button>
+            )}
+          </div>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={handleSaveDraft}>
+              {t('campaign.actions.saveDraft')}
+            </Button>
+            {currentStep < STEPS.length - 1 ? (
+              <Button onClick={nextStep}>
+                {t('common.next')}
+                <ArrowRight className="ml-2 h-4 w-4" />
+              </Button>
+            ) : (
+              <Button onClick={handleSendCampaign}>
+                <Send className="mr-2 h-4 w-4" />
+                {t('campaign.actions.send')}
+              </Button>
+            )}
+          </div>
+        </div>
+      </div>
+    </PageLayout>
+  );
+}
+
+// Step 1: Setup
+function SetupStep({
+  draft,
+  errors,
+  updateDraft,
+  t,
+}: {
+  draft: CampaignDraft;
+  errors: Record<string, string>;
+  updateDraft: (data: Partial<CampaignDraft>) => void;
+  t: ReturnType<typeof useTranslations>;
+}) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>{t('campaign.setup.title')}</CardTitle>
+        <CardDescription>{t('campaign.create.subtitle')}</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-6">
+        <div className="space-y-2">
+          <Label htmlFor="name">{t('campaign.setup.campaignName')}</Label>
+          <Input
+            id="name"
+            placeholder={t('campaign.setup.campaignNamePlaceholder')}
+            value={draft.name}
+            onChange={(e) => updateDraft({ name: e.target.value })}
+            className={errors.name ? 'border-red-500' : ''}
+          />
+          {errors.name && (
+            <p className="text-sm text-red-500">{errors.name}</p>
+          )}
+          <p className="text-sm text-muted-foreground">
+            {t('campaign.setup.campaignNameHint')}
+          </p>
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="subject">{t('campaign.setup.subject')}</Label>
+          <Input
+            id="subject"
+            placeholder={t('campaign.setup.subjectPlaceholder')}
+            value={draft.subject}
+            onChange={(e) => updateDraft({ subject: e.target.value })}
+            className={errors.subject ? 'border-red-500' : ''}
+          />
+          {errors.subject && (
+            <p className="text-sm text-red-500">{errors.subject}</p>
+          )}
+          <p className="text-sm text-muted-foreground">
+            {t('campaign.setup.subjectHint')}
+          </p>
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="previewText">{t('campaign.setup.previewText')}</Label>
+          <Input
+            id="previewText"
+            placeholder={t('campaign.setup.previewTextPlaceholder')}
+            value={draft.previewText}
+            onChange={(e) => updateDraft({ previewText: e.target.value })}
+          />
+          <p className="text-sm text-muted-foreground">
+            {t('campaign.setup.previewTextHint')}
+          </p>
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="space-y-2">
+            <Label htmlFor="fromName">{t('campaign.setup.fromName')}</Label>
+            <Input
+              id="fromName"
+              placeholder={t('campaign.setup.fromNamePlaceholder')}
+              value={draft.fromName}
+              onChange={(e) => updateDraft({ fromName: e.target.value })}
+              className={errors.fromName ? 'border-red-500' : ''}
+            />
+            {errors.fromName && (
+              <p className="text-sm text-red-500">{errors.fromName}</p>
+            )}
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="fromEmail">{t('campaign.setup.fromEmail')}</Label>
+            <Input
+              id="fromEmail"
+              type="email"
+              placeholder={t('campaign.setup.fromEmailPlaceholder')}
+              value={draft.fromEmail}
+              onChange={(e) => updateDraft({ fromEmail: e.target.value })}
+              className={errors.fromEmail ? 'border-red-500' : ''}
+            />
+            {errors.fromEmail && (
+              <p className="text-sm text-red-500">{errors.fromEmail}</p>
+            )}
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="replyTo">{t('campaign.setup.replyTo')}</Label>
+          <Input
+            id="replyTo"
+            type="email"
+            placeholder={t('campaign.setup.replyToPlaceholder')}
+            value={draft.replyTo}
+            onChange={(e) => updateDraft({ replyTo: e.target.value })}
+          />
+          <p className="text-sm text-muted-foreground">
+            {t('campaign.setup.replyToHint')}
+          </p>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+// Step 2: Content
+function ContentStep({
+  draft,
+  errors,
+  updateDraft,
+  t,
+}: {
+  draft: CampaignDraft;
+  errors: Record<string, string>;
+  updateDraft: (data: Partial<CampaignDraft>) => void;
+  t: ReturnType<typeof useTranslations>;
+}) {
+  const [editorMode, setEditorMode] = React.useState<'visual' | 'code'>(
+    draft.content ? 'code' : 'visual'
+  );
+
+  const mergeTags = [
+    'firstName',
+    'lastName',
+    'email',
+    'company',
+    'customField1',
+    'customField2',
+    'unsubscribeLink',
+    'date',
+  ];
+
+  const insertMergeTag = (tag: string) => {
+    updateDraft({ content: draft.content + `{{${tag}}}` });
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>{t('campaign.content.title')}</CardTitle>
+        <CardDescription>{t('campaign.content.mergeTagsHint')}</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-6">
+        {/* Editor Mode Selector */}
+        <div className="flex gap-2">
+          <Button
+            variant={editorMode === 'visual' ? 'default' : 'outline'}
+            onClick={() => setEditorMode('visual')}
+            className="flex-1"
+          >
+            <Palette className="mr-2 h-4 w-4" />
+            {t('campaign.content.visualBuilder')}
+          </Button>
+          <Button
+            variant={editorMode === 'code' ? 'default' : 'outline'}
+            onClick={() => setEditorMode('code')}
+            className="flex-1"
+          >
+            <Code className="mr-2 h-4 w-4" />
+            {t('campaign.content.codeEditor')}
+          </Button>
+        </div>
+
+        {editorMode === 'visual' ? (
+          /* Visual Builder Option */
+          <div className="rounded-lg border-2 border-dashed border-muted-foreground/30 p-8 text-center">
+            <Palette className="mx-auto h-12 w-12 text-muted-foreground/50 mb-4" />
+            <h3 className="text-lg font-semibold mb-2">
+              {t('campaign.content.dragDropBuilder')}
+            </h3>
+            <p className="text-sm text-muted-foreground mb-4">
+              {t('campaign.content.dragDropBuilderDesc')}
+            </p>
+            <Button asChild>
+              <Link href="/templates/builder">
+                <Palette className="mr-2 h-4 w-4" />
+                {t('campaign.content.openBuilder')}
+              </Link>
+            </Button>
+            {draft.content && (
+              <p className="mt-4 text-sm text-green-600">
+                ✓ {t('campaign.content.contentLoaded')}
+              </p>
+            )}
+          </div>
+        ) : (
+          /* Code Editor */
+          <>
+            {/* Merge Tags */}
+            <div className="space-y-2">
+              <Label>{t('campaign.content.mergeTags')}</Label>
+              <div className="flex flex-wrap gap-2">
+                {mergeTags.map((tag) => (
+                  <Button
+                    key={tag}
+                    variant="outline"
+                    size="sm"
+                    onClick={() => insertMergeTag(tag)}
+                  >
+                    {`{{${tag}}}`}
+                  </Button>
+                ))}
+              </div>
+            </div>
+
+            {/* Content Editor */}
+            <div className="space-y-2">
+              <Label htmlFor="content">{t('campaign.content.editor')}</Label>
+              <textarea
+                id="content"
+                className={cn(
+                  'min-h-[300px] w-full rounded-md border bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring font-mono',
+                  errors.content ? 'border-red-500' : 'border-input'
+                )}
+                placeholder="<html><body><h1>Hello {{firstName}}!</h1><p>Your email content here...</p></body></html>"
+                value={draft.content}
+                onChange={(e) => updateDraft({ content: e.target.value })}
+              />
+              {errors.content && (
+                <p className="text-sm text-red-500">{errors.content}</p>
+              )}
+            </div>
+          </>
+        )}
+
+        {/* Preview */}
+        {draft.content && (
+          <div className="space-y-2">
+            <Label>{t('campaign.content.preview')}</Label>
+            <div className="rounded-md border bg-white p-4 max-h-64 overflow-y-auto">
+              <div
+                dangerouslySetInnerHTML={{
+                  __html: draft.content
+                    .replace(/\{\{firstName\}\}/g, 'John')
+                    .replace(/\{\{lastName\}\}/g, 'Doe')
+                    .replace(/\{\{email\}\}/g, 'john@example.com')
+                    .replace(/\{\{company\}\}/g, 'Acme Inc')
+                    .replace(/\{\{date\}\}/g, new Date().toLocaleDateString()),
+                }}
+              />
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+// Step 3: Recipients
+function RecipientsStep({
+  draft,
+  errors,
+  updateDraft,
+  t,
+}: {
+  draft: CampaignDraft;
+  errors: Record<string, string>;
+  updateDraft: (data: Partial<CampaignDraft>) => void;
+  t: ReturnType<typeof useTranslations>;
+}) {
+  const handlePasteEmails = (text: string) => {
+    const emails = text
+      .split(/[\n,;]/)
+      .map((e) => e.trim())
+      .filter((e) => e && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e));
+    updateDraft({ recipients: [...new Set([...draft.recipients, ...emails])] });
+  };
+
+  const removeRecipient = (email: string) => {
+    updateDraft({ recipients: draft.recipients.filter((e) => e !== email) });
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>{t('campaign.recipients.title')}</CardTitle>
+        <CardDescription>
+          {t('campaign.recipients.totalRecipients')}: {draft.recipients.length}
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-6">
+        {/* Paste Emails */}
+        <div className="space-y-2">
+          <Label>{t('campaign.recipients.pasteEmails')}</Label>
+          <textarea
+            className={cn(
+              'min-h-[120px] w-full rounded-md border bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring',
+              errors.recipients ? 'border-red-500' : 'border-input'
+            )}
+            placeholder={t('campaign.recipients.pasteEmailsPlaceholder')}
+            onBlur={(e) => {
+              if (e.target.value) {
+                handlePasteEmails(e.target.value);
+                e.target.value = '';
+              }
+            }}
+          />
+          {errors.recipients && (
+            <p className="text-sm text-red-500">{errors.recipients}</p>
+          )}
+        </div>
+
+        {/* Recipients List */}
+        {draft.recipients.length > 0 && (
+          <div className="space-y-2">
+            <Label>
+              {t('campaign.recipients.totalRecipients')}: {draft.recipients.length}
+            </Label>
+            <div className="max-h-48 overflow-y-auto rounded-md border p-2">
+              <div className="flex flex-wrap gap-2">
+                {draft.recipients.map((email) => (
+                  <span
+                    key={email}
+                    className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-3 py-1 text-sm"
+                  >
+                    {email}
+                    <button
+                      onClick={() => removeRecipient(email)}
+                      className="ml-1 text-muted-foreground hover:text-foreground"
+                    >
+                      ×
+                    </button>
+                  </span>
+                ))}
+              </div>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => updateDraft({ recipients: [] })}
+            >
+              {t('common.clear')}
+            </Button>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+// Step 4: Review
+function ReviewStep({
+  draft,
+  t,
+}: {
+  draft: CampaignDraft;
+  t: ReturnType<typeof useTranslations>;
+}) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>{t('campaign.review.title')}</CardTitle>
+        <CardDescription>{t('campaign.review.summary')}</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-6">
+        {/* Campaign Details */}
+        <div className="rounded-lg border p-4">
+          <h3 className="mb-4 font-semibold">
+            {t('campaign.review.campaignDetails')}
+          </h3>
+          <dl className="grid gap-2 text-sm">
+            <div className="flex justify-between">
+              <dt className="text-muted-foreground">
+                {t('campaign.setup.campaignName')}:
+              </dt>
+              <dd className="font-medium">{draft.name}</dd>
+            </div>
+            <div className="flex justify-between">
+              <dt className="text-muted-foreground">
+                {t('campaign.setup.subject')}:
+              </dt>
+              <dd className="font-medium">{draft.subject}</dd>
+            </div>
+            <div className="flex justify-between">
+              <dt className="text-muted-foreground">
+                {t('campaign.setup.fromName')}:
+              </dt>
+              <dd className="font-medium">{draft.fromName}</dd>
+            </div>
+            <div className="flex justify-between">
+              <dt className="text-muted-foreground">
+                {t('campaign.setup.fromEmail')}:
+              </dt>
+              <dd className="font-medium">{draft.fromEmail}</dd>
+            </div>
+          </dl>
+        </div>
+
+        {/* Recipients Summary */}
+        <div className="rounded-lg border p-4">
+          <h3 className="mb-4 font-semibold">
+            {t('campaign.review.recipientsSummary')}
+          </h3>
+          <p className="text-2xl font-bold text-primary">
+            {draft.recipients.length}
+          </p>
+          <p className="text-sm text-muted-foreground">
+            {t('campaigns.stats.recipients')}
+          </p>
+        </div>
+
+        {/* Content Preview */}
+        <div className="rounded-lg border p-4">
+          <h3 className="mb-4 font-semibold">
+            {t('campaign.review.contentPreview')}
+          </h3>
+          <div className="max-h-48 overflow-y-auto rounded-md bg-muted p-4">
+            <div
+              dangerouslySetInnerHTML={{
+                __html: draft.content
+                  .replace(/\{\{firstName\}\}/g, 'John')
+                  .replace(/\{\{lastName\}\}/g, 'Doe')
+                  .replace(/\{\{email\}\}/g, 'john@example.com')
+                  .substring(0, 500) + '...',
+              }}
+            />
+          </div>
+        </div>
+
+        {/* Confirmation */}
+        <div className="rounded-lg border border-yellow-500/50 bg-yellow-500/10 p-4">
+          <p className="text-sm">
+            {t('campaign.review.confirmSendMessage', {
+              count: draft.recipients.length,
+            })}
+          </p>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}

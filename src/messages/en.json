@@ -151,6 +151,12 @@
       "previewMobile": "Mobile",
       "mergeTags": "Merge Tags",
       "mergeTagsHint": "Click to insert personalization",
+      "visualBuilder": "Visual Builder",
+      "codeEditor": "Code Editor",
+      "dragDropBuilder": "Drag & Drop Email Builder",
+      "dragDropBuilderDesc": "Create beautiful emails with our visual builder. Drag blocks to design your email without writing code.",
+      "openBuilder": "Open Email Builder",
+      "contentLoaded": "Content loaded from builder",
       "availableTags": {
         "firstName": "First Name",
         "lastName": "Last Name",
