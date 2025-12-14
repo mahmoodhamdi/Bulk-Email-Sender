@@ -151,6 +151,7 @@ model Recipient {
 
   events      EmailEvent[]
 
+  @@unique([campaignId, email])
   @@index([campaignId])
   @@index([email])
   @@index([status])
@@ -199,7 +200,7 @@ enum EventType {
 
 model SmtpConfig {
   id          String   @id @default(cuid())
-  name        String
+  name        String   @unique
   host        String
   port        Int
   secure      Boolean  @default(false)
