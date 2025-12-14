@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createEmailSender } from '@/lib/email/sender';
 import { replaceMergeTags } from '@/lib/email/merge-tags';
+import { emailSendRateLimiter } from '@/lib/rate-limit';
+import { isValidEmail } from '@/lib/utils';
 
 export interface TestEmailRequest {
   to: string[];
@@ -40,6 +42,12 @@ export interface TestEmailResponse {
 }
 
 export async function POST(request: NextRequest) {
+  // Apply rate limiting (10 requests per minute)
+  const rateLimitResponse = await emailSendRateLimiter.middleware(request);
+  if (rateLimitResponse) {
+    return rateLimitResponse;
+  }
+
   try {
     const body: TestEmailRequest = await request.json();
     const {
@@ -82,9 +90,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Validate emails
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    const invalidEmails = to.filter((email) => !emailRegex.test(email));
+    // Validate emails using RFC 5321 compliant validation
+    const invalidEmails = to.filter((email) => !isValidEmail(email));
     if (invalidEmails.length > 0) {
       return NextResponse.json(
         { success: false, error: `Invalid email addresses: ${invalidEmails.join(', ')}` },
