@@ -35,7 +35,7 @@ export function CampaignTable({
     denominator > 0 ? (numerator / denominator) * 100 : 0;
 
   const sortedCampaigns = useMemo(() => {
-    let filtered = campaigns.filter((c) =>
+    const filtered = campaigns.filter((c) =>
       c.name.toLowerCase().includes(searchQuery.toLowerCase())
     );
 
