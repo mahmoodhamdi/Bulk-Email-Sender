@@ -20,6 +20,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
+import { getContactDisplay, hasContactInfo } from '@/lib/config';
 
 interface PageProps {
   params: Promise<{ locale: string }>;
@@ -291,9 +292,11 @@ function DashboardContent() {
         {/* Footer */}
         <footer className="border-t p-6 text-center text-sm text-muted-foreground">
           <p>{t('footer.copyright', { year: new Date().getFullYear() })}</p>
-          <p className="mt-1">
-            {t('footer.contact')}: mwm.softwars.solutions@gmail.com | +201019793768
-          </p>
+          {hasContactInfo() && (
+            <p className="mt-1">
+              {t('footer.contact')}: {getContactDisplay()}
+            </p>
+          )}
         </footer>
       </main>
     </div>
