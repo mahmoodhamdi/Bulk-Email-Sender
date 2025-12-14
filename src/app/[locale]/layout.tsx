@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation';
 import { routing } from '@/i18n/routing';
 import { localeDirection, type Locale } from '@/i18n/config';
 import { ThemeProvider } from '@/components/providers/ThemeProvider';
+import { ErrorBoundaryProvider } from '@/components/providers/ErrorBoundaryProvider';
 
 export function generateStaticParams() {
   return routing.locales.map((locale) => ({ locale }));
@@ -30,9 +31,11 @@ export default async function LocaleLayout({
     <html lang={locale} dir={dir}>
       <body className="min-h-screen bg-background font-sans antialiased">
         <NextIntlClientProvider messages={messages}>
-          <ThemeProvider>
-            {children}
-          </ThemeProvider>
+          <ErrorBoundaryProvider>
+            <ThemeProvider>
+              {children}
+            </ThemeProvider>
+          </ErrorBoundaryProvider>
         </NextIntlClientProvider>
       </body>
     </html>
