@@ -1,7 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createEmailSender } from '@/lib/email/sender';
+import { smtpTestRateLimiter } from '@/lib/rate-limit';
 
 export async function POST(request: NextRequest) {
+  // Apply rate limiting (5 requests per 5 minutes)
+  const rateLimitResponse = await smtpTestRateLimiter.middleware(request);
+  if (rateLimitResponse) {
+    return rateLimitResponse;
+  }
+
   try {
     const body = await request.json();
     const { host, port, secure, username, password } = body;
