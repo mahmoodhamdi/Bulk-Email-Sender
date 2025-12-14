@@ -174,32 +174,13 @@ export const useSettingsStore = create<SettingsStore>()(
       },
 
       setTheme: (theme) => {
+        // Only update state - DOM manipulation is handled by useTheme hook
         set({ theme });
-        // Apply theme to document
-        if (typeof window !== 'undefined') {
-          const root = document.documentElement;
-          root.classList.remove('light', 'dark');
-          if (theme === 'system') {
-            const systemTheme = window.matchMedia('(prefers-color-scheme: dark)').matches
-              ? 'dark'
-              : 'light';
-            root.classList.add(systemTheme);
-          } else {
-            root.classList.add(theme);
-          }
-        }
       },
 
       setLanguage: (language) => {
+        // Only update state - locale changes are handled by the component/router
         set({ language });
-        // Redirect to change locale
-        if (typeof window !== 'undefined') {
-          const currentPath = window.location.pathname;
-          const newPath = currentPath.replace(/^\/(en|ar)/, `/${language}`);
-          if (newPath !== currentPath) {
-            window.location.href = newPath || `/${language}`;
-          }
-        }
       },
 
       resetSettings: () => {
