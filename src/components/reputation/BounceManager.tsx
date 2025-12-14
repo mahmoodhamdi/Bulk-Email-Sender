@@ -3,6 +3,13 @@
 import { useReputationStore, BounceType, BounceEvent } from '@/stores/reputation-store';
 import { useTranslations } from 'next-intl';
 import { useState } from 'react';
+import { usePagination } from '@/hooks/usePagination';
+import {
+  Pagination,
+  PaginationContainer,
+  PaginationInfo,
+  PageSizeSelector,
+} from '@/components/ui/pagination';
 
 export function BounceManager() {
   const t = useTranslations('reputation');
@@ -21,6 +28,20 @@ export function BounceManager() {
   const [showConfirmDialog, setShowConfirmDialog] = useState<'all' | 'hard' | 'selected' | null>(null);
 
   const filteredBounces = getFilteredBounces();
+
+  // Pagination
+  const {
+    paginatedItems: paginatedBounces,
+    currentPage,
+    totalPages,
+    pageSize,
+    totalItems,
+    startIndex,
+    endIndex,
+    goToPage,
+    setPageSize,
+    pageSizeOptions,
+  } = usePagination(filteredBounces, { initialPageSize: 25 });
 
   const handleSelectAll = () => {
     if (selectedBounces.size === filteredBounces.length) {
@@ -201,7 +222,7 @@ export function BounceManager() {
                   </td>
                 </tr>
               ) : (
-                filteredBounces.map((bounce) => (
+                paginatedBounces.map((bounce) => (
                   <tr key={bounce.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
                     <td className="px-4 py-3">
                       <input
@@ -250,6 +271,29 @@ export function BounceManager() {
             </tbody>
           </table>
         </div>
+
+        {/* Pagination */}
+        {totalItems > 0 && (
+          <PaginationContainer className="px-4">
+            <div className="flex items-center gap-4">
+              <PaginationInfo
+                startIndex={startIndex}
+                endIndex={endIndex}
+                totalItems={totalItems}
+              />
+              <PageSizeSelector
+                pageSize={pageSize}
+                onPageSizeChange={setPageSize}
+                options={pageSizeOptions}
+              />
+            </div>
+            <Pagination
+              currentPage={currentPage}
+              totalPages={totalPages}
+              onPageChange={goToPage}
+            />
+          </PaginationContainer>
+        )}
       </div>
 
       {/* Actions */}

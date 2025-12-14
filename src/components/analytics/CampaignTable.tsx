@@ -6,9 +6,16 @@ import { ChevronUp, ChevronDown, Search, Download, ExternalLink } from 'lucide-r
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import {
+  Pagination,
+  PaginationContainer,
+  PaginationInfo,
+  PageSizeSelector,
+} from '@/components/ui/pagination';
 import { Sparkline } from './Charts';
 import { type CampaignMetrics, formatNumber, formatPercentage } from '@/stores/analytics-store';
 import { cn } from '@/lib/utils';
+import { usePagination } from '@/hooks/usePagination';
 
 interface CampaignTableProps {
   campaigns: CampaignMetrics[];
@@ -83,6 +90,20 @@ export function CampaignTable({
         : (bValue as number) - (aValue as number);
     });
   }, [campaigns, searchQuery, sortField, sortDirection]);
+
+  // Pagination
+  const {
+    paginatedItems: paginatedCampaigns,
+    currentPage,
+    totalPages,
+    pageSize,
+    totalItems,
+    startIndex,
+    endIndex,
+    goToPage,
+    setPageSize,
+    pageSizeOptions,
+  } = usePagination(sortedCampaigns, { initialPageSize: 10 });
 
   const handleSort = (field: SortField) => {
     if (sortField === field) {
@@ -212,7 +233,7 @@ export function CampaignTable({
               </tr>
             </thead>
             <tbody>
-              {sortedCampaigns.map((campaign) => {
+              {paginatedCampaigns.map((campaign) => {
                 const openRate = calculateRate(campaign.opened, campaign.delivered);
                 const clickRate = calculateRate(campaign.clicked, campaign.delivered);
 
@@ -298,6 +319,29 @@ export function CampaignTable({
             </div>
           )}
         </div>
+
+        {/* Pagination */}
+        {totalItems > 0 && (
+          <PaginationContainer>
+            <div className="flex items-center gap-4">
+              <PaginationInfo
+                startIndex={startIndex}
+                endIndex={endIndex}
+                totalItems={totalItems}
+              />
+              <PageSizeSelector
+                pageSize={pageSize}
+                onPageSizeChange={setPageSize}
+                options={pageSizeOptions}
+              />
+            </div>
+            <Pagination
+              currentPage={currentPage}
+              totalPages={totalPages}
+              onPageChange={goToPage}
+            />
+          </PaginationContainer>
+        )}
       </CardContent>
     </Card>
   );
