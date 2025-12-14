@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { generateShortId } from '@/lib/crypto';
 
 export type BlockType =
   | 'text'
@@ -146,7 +147,7 @@ interface EmailBuilderStore {
   resetTemplate: () => void;
 }
 
-const generateId = () => Math.random().toString(36).substring(2, 9);
+const generateId = () => generateShortId(12);
 
 const createDefaultBlock = (type: BlockType): EmailBlock => {
   const baseStyles: BlockStyles = {

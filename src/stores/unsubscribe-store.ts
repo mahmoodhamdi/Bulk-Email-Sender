@@ -2,6 +2,8 @@
 
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { generateShortId, escapeCSV } from '@/lib/crypto';
+import { isValidEmail } from '@/lib/utils';
 
 // Types
 export type UnsubscribeReason =
@@ -102,15 +104,9 @@ interface UnsubscribeActions {
   clearError: () => void;
 }
 
-// Generate unique ID
+// Generate unique ID using crypto API
 function generateId(): string {
-  return `sup_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-}
-
-// Validate email
-function isValidEmail(email: string): boolean {
-  const regex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  return regex.test(email);
+  return `sup_${generateShortId(12)}`;
 }
 
 // Generate mock data for demo
@@ -370,15 +366,15 @@ export const useUnsubscribeStore = create<UnsubscribeState & UnsubscribeActions>
         const list = get().getFilteredList();
         const headers = ['Email', 'Reason', 'Source', 'Campaign', 'Feedback', 'Date'];
         const rows = list.map((c) => [
-          c.email,
-          c.reason,
-          c.source,
-          c.campaignName || '',
-          c.feedback || '',
-          c.suppressedAt.toISOString(),
+          escapeCSV(c.email),
+          escapeCSV(c.reason),
+          escapeCSV(c.source),
+          escapeCSV(c.campaignName || ''),
+          escapeCSV(c.feedback || ''),
+          escapeCSV(c.suppressedAt.toISOString()),
         ]);
 
-        return [headers.join(','), ...rows.map((r) => r.map((v) => `"${v}"`).join(','))].join('\n');
+        return [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
       },
 
       // Filtering

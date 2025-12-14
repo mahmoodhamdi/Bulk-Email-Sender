@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { generateShortId } from '@/lib/crypto';
 
 export interface Timezone {
   id: string;
@@ -287,7 +288,7 @@ export const useScheduleStore = create<ScheduleStore>()(
         const scheduledAtUTC = toUTC(scheduledDate, selectedTimezone);
 
         const newSchedule: ScheduledCampaign = {
-          id: `schedule-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+          id: `schedule-${generateShortId(12)}`,
           campaignId,
           campaignName,
           scheduledAt: scheduledAtUTC,

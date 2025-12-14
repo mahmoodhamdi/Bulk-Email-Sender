@@ -2,6 +2,7 @@
 
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { generateShortId } from '@/lib/crypto';
 
 // Types
 export type TriggerType = 'signup' | 'tag_added' | 'date_field' | 'manual' | 'email_opened' | 'link_clicked';
@@ -137,13 +138,34 @@ interface AutomationActions {
   clearError: () => void;
 }
 
-// Generate unique ID
+// Generate unique ID using crypto API
 function generateId(): string {
-  return `auto_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  return `auto_${generateShortId(12)}`;
 }
 
 function generateStepId(): string {
-  return `step_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  return `step_${generateShortId(12)}`;
+}
+
+/**
+ * Detect cycles in workflow connections to prevent infinite loops
+ */
+function detectCycle(steps: AutomationStep[], fromId: string, toId: string): boolean {
+  const visited = new Set<string>();
+  const stack = [toId];
+
+  while (stack.length > 0) {
+    const current = stack.pop()!;
+    if (current === fromId) return true; // Cycle detected
+    if (visited.has(current)) continue;
+    visited.add(current);
+
+    const step = steps.find((s) => s.id === current);
+    if (step?.nextStepId) stack.push(step.nextStepId);
+    if (step?.trueStepId) stack.push(step.trueStepId);
+    if (step?.falseStepId) stack.push(step.falseStepId);
+  }
+  return false;
 }
 
 // Default step configs
@@ -599,6 +621,15 @@ export const useAutomationStore = create<AutomationState & AutomationActions>()(
       connectSteps: (fromId, toId, branch) => {
         set((state) => {
           if (!state.currentAutomation) return state;
+
+          // Check for cycles before connecting
+          if (detectCycle(state.currentAutomation.steps, fromId, toId)) {
+            console.error('Circular workflow detected - connection blocked');
+            return {
+              ...state,
+              error: 'Cannot create connection: this would create a circular workflow',
+            };
+          }
 
           const steps = state.currentAutomation.steps.map((step) => {
             if (step.id !== fromId) return step;

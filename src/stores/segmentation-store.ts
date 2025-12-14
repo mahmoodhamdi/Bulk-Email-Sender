@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { generateShortId } from '@/lib/crypto';
 
 export type ConditionField =
   | 'email'
@@ -95,7 +96,7 @@ interface SegmentationStore {
   setPreviewContacts: (contacts: string[]) => void;
 }
 
-const generateId = () => Math.random().toString(36).substring(2, 9);
+const generateId = () => generateShortId(12);
 
 const createDefaultCondition = (): SegmentCondition => ({
   id: generateId(),

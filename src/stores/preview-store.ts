@@ -1,6 +1,7 @@
 'use client';
 
 import { create } from 'zustand';
+import { generateShortId } from '@/lib/crypto';
 
 // Types
 export interface Contact {
@@ -395,7 +396,7 @@ export const usePreviewStore = create<PreviewState & PreviewActions>((set, get) 
 
       const results: TestSendResult[] = state.testEmails.map((email) => ({
         success: true,
-        messageId: `test-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        messageId: `test-${generateShortId(12)}`,
         sentAt: new Date(),
         recipient: email,
       }));
