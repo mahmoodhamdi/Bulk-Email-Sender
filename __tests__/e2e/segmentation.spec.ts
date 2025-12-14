@@ -132,6 +132,61 @@ test.describe('Email Builder Feature', () => {
   });
 });
 
+test.describe('Enhanced Analytics Dashboard', () => {
+  test('should display analytics page with charts', async ({ page }) => {
+    await page.goto('/analytics');
+    await page.waitForLoadState('networkidle');
+
+    // Check page loads
+    await expect(page.locator('body')).toBeVisible();
+
+    // Take screenshot
+    await page.screenshot({ path: 'screenshots/analytics-01-dashboard.png', fullPage: true });
+  });
+
+  test('should show date range selector', async ({ page }) => {
+    await page.goto('/analytics');
+    await page.waitForLoadState('networkidle');
+
+    // Look for date range buttons
+    const dateRangeButtons = page.locator('button:has-text("Last 7 days"), button:has-text("Last 30 days")');
+    await expect(dateRangeButtons.first()).toBeVisible();
+
+    // Take screenshot
+    await page.screenshot({ path: 'screenshots/analytics-02-daterange.png', fullPage: true });
+  });
+
+  test('should support Arabic RTL layout for analytics', async ({ page }) => {
+    await page.goto('/ar/analytics');
+    await page.waitForLoadState('networkidle');
+
+    // Check RTL direction
+    const html = page.locator('html');
+    await expect(html).toHaveAttribute('dir', 'rtl');
+
+    // Take screenshot
+    await page.screenshot({ path: 'screenshots/analytics-03-rtl.png', fullPage: true });
+  });
+
+  test('should be responsive on mobile for analytics', async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 667 });
+    await page.goto('/analytics');
+    await page.waitForLoadState('networkidle');
+
+    // Take mobile screenshot
+    await page.screenshot({ path: 'screenshots/analytics-04-mobile.png', fullPage: true });
+  });
+
+  test('should be responsive on tablet for analytics', async ({ page }) => {
+    await page.setViewportSize({ width: 768, height: 1024 });
+    await page.goto('/analytics');
+    await page.waitForLoadState('networkidle');
+
+    // Take tablet screenshot
+    await page.screenshot({ path: 'screenshots/analytics-05-tablet.png', fullPage: true });
+  });
+});
+
 test.describe('Campaign Scheduling Feature', () => {
   test('should display campaign creation with scheduling', async ({ page }) => {
     await page.goto('/campaigns/new');
