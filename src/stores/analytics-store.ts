@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { escapeCSV } from '@/lib/crypto';
 
 export interface CampaignMetrics {
   id: string;
@@ -496,25 +497,25 @@ export const useAnalyticsStore = create<AnalyticsStore>((set, get) => ({
     ];
 
     const rows = campaigns.map((c) => [
-      c.name,
-      c.status,
-      c.sent.toString(),
-      c.delivered.toString(),
-      c.opened.toString(),
-      c.clicked.toString(),
-      c.bounced.toString(),
-      c.unsubscribed.toString(),
-      c.sentAt.toISOString().split('T')[0],
+      escapeCSV(c.name),
+      escapeCSV(c.status),
+      escapeCSV(c.sent),
+      escapeCSV(c.delivered),
+      escapeCSV(c.opened),
+      escapeCSV(c.clicked),
+      escapeCSV(c.bounced),
+      escapeCSV(c.unsubscribed),
+      escapeCSV(c.sentAt.toISOString().split('T')[0]),
     ]);
 
     // Add summary row
     rows.push([]);
-    rows.push(['Summary']);
-    rows.push(['Total Sent', summary.totalSent.toString()]);
-    rows.push(['Delivery Rate', `${summary.deliveryRate.toFixed(2)}%`]);
-    rows.push(['Open Rate', `${summary.openRate.toFixed(2)}%`]);
-    rows.push(['Click Rate', `${summary.clickRate.toFixed(2)}%`]);
-    rows.push(['Bounce Rate', `${summary.bounceRate.toFixed(2)}%`]);
+    rows.push([escapeCSV('Summary')]);
+    rows.push([escapeCSV('Total Sent'), escapeCSV(summary.totalSent)]);
+    rows.push([escapeCSV('Delivery Rate'), escapeCSV(`${summary.deliveryRate.toFixed(2)}%`)]);
+    rows.push([escapeCSV('Open Rate'), escapeCSV(`${summary.openRate.toFixed(2)}%`)]);
+    rows.push([escapeCSV('Click Rate'), escapeCSV(`${summary.clickRate.toFixed(2)}%`)]);
+    rows.push([escapeCSV('Bounce Rate'), escapeCSV(`${summary.bounceRate.toFixed(2)}%`)]);
 
     const csvContent = [headers.join(','), ...rows.map((row) => row.join(','))].join('\n');
 
