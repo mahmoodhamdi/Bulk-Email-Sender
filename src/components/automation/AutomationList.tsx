@@ -4,6 +4,13 @@ import { useAutomationStore, type Automation, type AutomationStatus } from '@/st
 import { useTranslations } from 'next-intl';
 import { useState } from 'react';
 import Link from 'next/link';
+import { usePagination } from '@/hooks/usePagination';
+import {
+  Pagination,
+  PaginationContainer,
+  PaginationInfo,
+  PageSizeSelector,
+} from '@/components/ui/pagination';
 
 // Status badge component
 function StatusBadge({ status }: { status: AutomationStatus }) {
@@ -174,6 +181,20 @@ export function AutomationList() {
 
   const automations = getFilteredAutomations();
 
+  // Pagination
+  const {
+    paginatedItems: paginatedAutomations,
+    currentPage,
+    totalPages,
+    pageSize,
+    totalItems,
+    startIndex,
+    endIndex,
+    goToPage,
+    setPageSize,
+    pageSizeOptions,
+  } = usePagination(automations, { initialPageSize: 10 });
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center p-12">
@@ -246,11 +267,36 @@ export function AutomationList() {
           </Link>
         </div>
       ) : (
-        <div className="grid gap-4">
-          {automations.map((automation) => (
-            <AutomationCard key={automation.id} automation={automation} />
-          ))}
-        </div>
+        <>
+          <div className="grid gap-4">
+            {paginatedAutomations.map((automation) => (
+              <AutomationCard key={automation.id} automation={automation} />
+            ))}
+          </div>
+
+          {/* Pagination */}
+          {totalItems > 0 && (
+            <PaginationContainer>
+              <div className="flex items-center gap-4">
+                <PaginationInfo
+                  startIndex={startIndex}
+                  endIndex={endIndex}
+                  totalItems={totalItems}
+                />
+                <PageSizeSelector
+                  pageSize={pageSize}
+                  onPageSizeChange={setPageSize}
+                  options={pageSizeOptions}
+                />
+              </div>
+              <Pagination
+                currentPage={currentPage}
+                totalPages={totalPages}
+                onPageChange={goToPage}
+              />
+            </PaginationContainer>
+          )}
+        </>
       )}
     </div>
   );
