@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { generateShortId } from '@/lib/crypto';
 
 export type ABTestType = 'subject' | 'content' | 'fromName' | 'sendTime';
 
@@ -69,7 +70,7 @@ interface ABTestStore {
   getVariantStats: (variantId: string) => { openRate: number; clickRate: number; conversionRate: number } | null;
 }
 
-const generateId = () => Math.random().toString(36).substring(2, 9);
+const generateId = () => generateShortId(12);
 
 const createEmptyVariant = (name: string): ABVariant => ({
   id: generateId(),
