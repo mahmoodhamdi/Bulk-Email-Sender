@@ -5,11 +5,15 @@ import {
   TIMEZONES,
   getLocalTimezone,
   formatTimezoneDisplay,
-  convertToTimezone,
-  toUTC,
   formatScheduledDate,
   getTimeUntil,
 } from '@/stores/schedule-store';
+import {
+  localToUTC,
+  isValidTimezone,
+  getTimezoneOffset,
+  formatTimezoneOffset,
+} from '@/lib/timezone';
 
 describe('Schedule Store', () => {
   beforeEach(() => {
@@ -377,14 +381,14 @@ describe('Timezone Utilities', () => {
       TIMEZONES.forEach((tz) => {
         expect(tz.id).toBeDefined();
         expect(tz.label).toBeDefined();
-        expect(tz.offset).toBeDefined();
         expect(tz.region).toBeDefined();
+        // Note: offset is now calculated dynamically for DST awareness
       });
     });
 
-    it('should have valid offset format', () => {
+    it('should have valid IANA timezone identifiers', () => {
       TIMEZONES.forEach((tz) => {
-        expect(tz.offset).toMatch(/^[+-]\d{2}:\d{2}$/);
+        expect(isValidTimezone(tz.id)).toBe(true);
       });
     });
   });
@@ -403,9 +407,11 @@ describe('Timezone Utilities', () => {
       expect(result).toBe('Eastern Time (-05:00)');
     });
 
-    it('should return id for unknown timezone', () => {
+    it('should return id with offset for unknown timezone', () => {
       const result = formatTimezoneDisplay('Unknown/Timezone');
-      expect(result).toBe('Unknown/Timezone');
+      // Unknown timezones still get formatted with calculated offset
+      expect(result).toContain('Unknown/Timezone');
+      expect(result).toMatch(/Unknown\/Timezone \([+-]\d{2}:\d{2}\)/);
     });
 
     it('should format UTC', () => {
@@ -458,31 +464,58 @@ describe('Timezone Utilities', () => {
     });
   });
 
-  describe('toUTC', () => {
+  describe('localToUTC', () => {
     it('should convert date to UTC', () => {
       const date = new Date('2025-01-15T10:00:00');
-      const result = toUTC(date, 'UTC');
+      const result = localToUTC(date, 'UTC');
       expect(result).toBeInstanceOf(Date);
     });
 
-    it('should handle invalid timezone gracefully', () => {
+    it('should convert local time to UTC correctly', () => {
       const date = new Date('2025-01-15T10:00:00');
-      const result = toUTC(date, 'Invalid/Timezone');
-      expect(result).toBeInstanceOf(Date);
+      const resultUTC = localToUTC(date, 'UTC');
+      const resultNY = localToUTC(date, 'America/New_York');
+
+      expect(resultUTC).toBeInstanceOf(Date);
+      expect(resultNY).toBeInstanceOf(Date);
+
+      // In winter, America/New_York is UTC-5
+      // The difference should be 5 hours (absolute value)
+      const diffMs = Math.abs(resultNY.getTime() - resultUTC.getTime());
+      const diffHours = diffMs / (1000 * 60 * 60);
+      expect(diffHours).toBe(5);
     });
   });
 
-  describe('convertToTimezone', () => {
-    it('should convert between timezones', () => {
-      const date = new Date('2025-01-15T10:00:00Z');
-      const result = convertToTimezone(date, 'UTC', 'America/New_York');
-      expect(result).toBeInstanceOf(Date);
+  describe('getTimezoneOffset', () => {
+    it('should return offset for valid timezone', () => {
+      const offset = getTimezoneOffset('UTC');
+      expect(offset).toBe(0);
     });
 
-    it('should handle invalid timezone gracefully', () => {
-      const date = new Date('2025-01-15T10:00:00Z');
-      const result = convertToTimezone(date, 'Invalid/From', 'Invalid/To');
-      expect(result).toBeInstanceOf(Date);
+    it('should return different offsets for DST vs non-DST dates', () => {
+      // January (winter) - standard time
+      const winterDate = new Date('2025-01-15T12:00:00Z');
+      const winterOffset = getTimezoneOffset('America/New_York', winterDate);
+
+      // July (summer) - daylight saving time
+      const summerDate = new Date('2025-07-15T12:00:00Z');
+      const summerOffset = getTimezoneOffset('America/New_York', summerDate);
+
+      // EDT (summer) is 1 hour ahead of EST (winter)
+      expect(winterOffset - summerOffset).toBe(60);
+    });
+  });
+
+  describe('formatTimezoneOffset', () => {
+    it('should format UTC offset correctly', () => {
+      const offset = formatTimezoneOffset('UTC');
+      expect(offset).toBe('+00:00');
+    });
+
+    it('should format timezone offset with sign', () => {
+      const offset = formatTimezoneOffset('America/New_York');
+      expect(offset).toMatch(/^[+-]\d{2}:\d{2}$/);
     });
   });
 });
