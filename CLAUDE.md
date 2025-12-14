@@ -46,48 +46,65 @@ npm install --legacy-peer-deps
 ### Directory Structure
 - `src/app/` - Next.js App Router pages and API routes
   - `src/app/[locale]/` - Locale-based pages (i18n routing)
-  - `src/app/api/` - API route handlers
+  - `src/app/api/` - API route handlers (health, smtp/test, email/test)
 - `src/lib/` - Core libraries
   - `src/lib/email/` - Email sending logic (sender, merge-tags, validator)
-  - `src/lib/db/` - Database utilities (Prisma client)
-- `src/components/` - React components (UI primitives in `ui/`)
+  - `src/lib/db/` - Database utilities (Prisma client singleton)
+  - `src/lib/crypto.ts` - Secure ID generation, XOR obfuscation, HTML/CSV escaping
+  - `src/lib/rate-limit.ts` - In-memory rate limiting with pre-configured limiters
+- `src/components/` - React components
+  - `ui/` - Radix UI primitives (button, card, dialog, etc.)
+  - `email-builder/` - Drag-and-drop email builder (Canvas, BlockPalette, PropertiesPanel)
+  - `analytics/` - Charts, MetricCard, CampaignTable
+  - `automation/` - Workflow builder, automation steps
+  - `reputation/` - Deliverability metrics, bounce manager, blacklist checker
+- `src/stores/` - Zustand stores for client-side state
 - `src/i18n/` - Internationalization config (next-intl)
 - `src/messages/` - Translation files (en.json, ar.json)
 - `prisma/` - Database schema (PostgreSQL)
-- `__tests__/` - Test files
-  - `__tests__/unit/` - Unit tests
-  - `__tests__/e2e/` - Playwright E2E tests
+- `__tests__/` - Test files (unit/, integration/, e2e/)
 - `docker/` - Docker configuration
 
 ### Path Aliases
 Use `@/*` to import from `src/*` (e.g., `import { cn } from '@/lib/utils'`)
 
 ### Database Schema (Prisma)
-Key models: Campaign, Template, Contact, ContactList, Recipient, EmailEvent, SmtpConfig, Unsubscribe. Campaign statuses: DRAFT, SCHEDULED, SENDING, PAUSED, COMPLETED, CANCELLED.
+Key models: Campaign, Template, Contact, ContactList, ContactListMember, Recipient, EmailEvent, SmtpConfig, Unsubscribe.
+
+Enums:
+- CampaignStatus: DRAFT, SCHEDULED, SENDING, PAUSED, COMPLETED, CANCELLED
+- ContactStatus: ACTIVE, UNSUBSCRIBED, BOUNCED, COMPLAINED
+- RecipientStatus: PENDING, QUEUED, SENT, DELIVERED, OPENED, CLICKED, BOUNCED, FAILED, UNSUBSCRIBED
+- EventType: SENT, DELIVERED, OPENED, CLICKED, BOUNCED, UNSUBSCRIBED, COMPLAINED
 
 ### Email System
-- `src/lib/email/sender.ts` - SMTP integration with Nodemailer, supports presets for Gmail, Outlook, Yahoo, SendGrid, Mailgun, SES, Zoho
-- `src/lib/email/merge-tags.ts` - Template variable processing ({{firstName}}, {{lastName}}, {{email}}, etc.)
+- `src/lib/email/sender.ts` - SMTP integration with Nodemailer, factory pattern via `createEmailSender()`. Supports presets: gmail, outlook, yahoo, sendgrid, mailgun, ses, zoho
+- `src/lib/email/merge-tags.ts` - Template variable processing ({{firstName}}, {{lastName}}, {{email}}, {{company}}, {{customField1}}, {{customField2}}, {{unsubscribeLink}}, {{date}})
 - `src/lib/email/validator.ts` - Email validation
 
 ### Internationalization
-Two locales: English (en) and Arabic (ar) with RTL support. Translations in `src/messages/`. Routes use `[locale]` dynamic segment with `localePrefix: 'as-needed'`.
+Two locales: English (en) and Arabic (ar) with RTL support. Config in `src/i18n/config.ts`. Routes use `[locale]` dynamic segment with `localePrefix: 'as-needed'`.
 
 ### Queue System
 Uses BullMQ with Redis for email queue processing.
 
 ### State Management
-Uses Zustand for client-side state management.
+Zustand stores in `src/stores/`: campaign, analytics, schedule, preview, ab-test, automation, segmentation, email-builder, reputation, unsubscribe, settings.
+
+### Rate Limiting
+Pre-configured limiters in `src/lib/rate-limit.ts`:
+- `apiRateLimiter`: 100 req/min
+- `authRateLimiter`: 5 req/min
+- `smtpTestRateLimiter`: 5 req/5min
+- `emailSendRateLimiter`: 10 req/min
 
 ## Testing Strategy
 
-- Unit tests: `__tests__/unit/` - Test individual functions/components
-- Integration tests: `__tests__/integration/` - Configured via `vitest.integration.config.ts` with 30s timeout
-- E2E tests: `__tests__/e2e/` - Playwright browser tests
+- Unit tests: `__tests__/unit/` - jsdom environment, `src/test/setup.ts`
+- Integration tests: `__tests__/integration/` - node environment, 30s timeout, `src/test/integration-setup.ts`
+- E2E tests: `__tests__/e2e/` - Playwright browser tests (*.spec.ts)
 
-Test files follow pattern: `*.test.ts` for unit/integration, `*.spec.ts` for E2E.
-
-Test setup mocks `next/navigation` and `next-intl` in `src/test/setup.ts`.
+Test setup mocks `next/navigation` and `next-intl` in `src/test/setup.ts`. Also mocks `ResizeObserver` and `window.matchMedia`.
 
 ## Environment Variables
 
