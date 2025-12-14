@@ -89,16 +89,48 @@ describe('Analytics Store Integration', () => {
     });
 
     it('should filter and recalculate when campaign selected', async () => {
-      await act(async () => {
-        await useAnalyticsStore.getState().loadAnalytics();
+      // Set up known campaigns to avoid random data issues
+      const knownCampaigns: CampaignMetrics[] = [
+        {
+          id: 'camp-1',
+          name: 'Campaign 1',
+          status: 'completed',
+          sent: 1000,
+          delivered: 950,
+          opened: 300,
+          clicked: 100,
+          bounced: 50,
+          unsubscribed: 10,
+          complaints: 2,
+          sentAt: new Date(),
+        },
+        {
+          id: 'camp-2',
+          name: 'Campaign 2',
+          status: 'completed',
+          sent: 2000,
+          delivered: 1900,
+          opened: 600,
+          clicked: 200,
+          bounced: 100,
+          unsubscribed: 20,
+          complaints: 5,
+          sentAt: new Date(),
+        },
+      ];
+
+      act(() => {
+        useAnalyticsStore.getState().setCampaigns(knownCampaigns);
+        useAnalyticsStore.getState().setDateRange('all');
+        useAnalyticsStore.getState().calculateSummary();
       });
 
-      const campaigns = useAnalyticsStore.getState().campaigns;
       const initialSummary = { ...useAnalyticsStore.getState().summary };
+      expect(initialSummary.totalSent).toBe(3000); // 1000 + 2000
 
       // Select a specific campaign
       act(() => {
-        useAnalyticsStore.getState().setSelectedCampaign(campaigns[0].id);
+        useAnalyticsStore.getState().setSelectedCampaign('camp-1');
       });
 
       const filteredSummary = useAnalyticsStore.getState().summary;
@@ -117,7 +149,7 @@ describe('Analytics Store Integration', () => {
       });
 
       const clearedSummary = useAnalyticsStore.getState().summary;
-      expect(clearedSummary.totalSent).toBe(initialSummary.totalSent);
+      expect(clearedSummary.totalSent).toBe(3000); // Back to initial
     });
   });
 
