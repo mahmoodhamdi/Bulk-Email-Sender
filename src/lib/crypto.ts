@@ -48,9 +48,130 @@ export function generateShortId(length = 12): string {
 }
 
 /**
- * Simple XOR-based obfuscation for client-side storage
- * NOTE: This is NOT strong encryption - for sensitive data, use server-side storage
- * This provides basic protection against casual inspection of localStorage
+ * Encryption key derivation
+ * Uses a device-specific fingerprint combined with a salt for better security
+ */
+const ENCRYPTION_SALT = 'bulk-email-sender-v2-salt';
+
+/**
+ * Generate a device-specific encryption key
+ * Combines browser fingerprint with salt for uniqueness per device
+ */
+function getDeviceFingerprint(): string {
+  if (typeof window === 'undefined') return 'server-side';
+  const components = [
+    navigator.userAgent,
+    navigator.language,
+    screen.width,
+    screen.height,
+    new Date().getTimezoneOffset(),
+  ];
+  return components.join('|');
+}
+
+/**
+ * Derive an encryption key from the device fingerprint
+ * Uses PBKDF2-like approach with multiple iterations
+ */
+async function deriveKey(): Promise<CryptoKey> {
+  const fingerprint = getDeviceFingerprint();
+  const encoder = new TextEncoder();
+  const keyMaterial = await crypto.subtle.importKey(
+    'raw',
+    encoder.encode(fingerprint),
+    'PBKDF2',
+    false,
+    ['deriveKey']
+  );
+
+  return crypto.subtle.deriveKey(
+    {
+      name: 'PBKDF2',
+      salt: encoder.encode(ENCRYPTION_SALT),
+      iterations: 100000,
+      hash: 'SHA-256',
+    },
+    keyMaterial,
+    { name: 'AES-GCM', length: 256 },
+    false,
+    ['encrypt', 'decrypt']
+  );
+}
+
+/**
+ * Encrypt sensitive data using AES-GCM
+ * Returns base64-encoded ciphertext with IV prepended
+ *
+ * WARNING: Client-side encryption has inherent limitations.
+ * For maximum security, store credentials server-side only.
+ */
+export async function encryptString(plaintext: string): Promise<string> {
+  if (!plaintext) return '';
+
+  if (typeof crypto === 'undefined' || !crypto.subtle) {
+    // Fallback to obfuscation for environments without Web Crypto
+    console.warn('Web Crypto API not available, using fallback obfuscation');
+    return obfuscateFallback(plaintext);
+  }
+
+  try {
+    const key = await deriveKey();
+    const encoder = new TextEncoder();
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+
+    const encrypted = await crypto.subtle.encrypt(
+      { name: 'AES-GCM', iv },
+      key,
+      encoder.encode(plaintext)
+    );
+
+    // Combine IV and ciphertext, then base64 encode
+    const combined = new Uint8Array(iv.length + encrypted.byteLength);
+    combined.set(iv);
+    combined.set(new Uint8Array(encrypted), iv.length);
+
+    return btoa(String.fromCharCode(...combined));
+  } catch {
+    // Fallback on error
+    return obfuscateFallback(plaintext);
+  }
+}
+
+/**
+ * Decrypt data encrypted with encryptString
+ */
+export async function decryptString(ciphertext: string): Promise<string> {
+  if (!ciphertext) return '';
+
+  if (typeof crypto === 'undefined' || !crypto.subtle) {
+    // Fallback to deobfuscation
+    return deobfuscateFallback(ciphertext);
+  }
+
+  try {
+    const key = await deriveKey();
+    const decoded = Uint8Array.from(atob(ciphertext), (c) => c.charCodeAt(0));
+
+    // Extract IV (first 12 bytes) and ciphertext
+    const iv = decoded.slice(0, 12);
+    const encrypted = decoded.slice(12);
+
+    const decrypted = await crypto.subtle.decrypt(
+      { name: 'AES-GCM', iv },
+      key,
+      encrypted
+    );
+
+    return new TextDecoder().decode(decrypted);
+  } catch {
+    // Try fallback deobfuscation for backward compatibility
+    return deobfuscateFallback(ciphertext);
+  }
+}
+
+/**
+ * Fallback XOR obfuscation for environments without Web Crypto
+ * @deprecated Use encryptString/decryptString for new code
  */
 const OBFUSCATION_KEY = 'bulk-email-sender-key-v1';
 
@@ -58,13 +179,7 @@ function getObfuscationKey(): number[] {
   return OBFUSCATION_KEY.split('').map((c) => c.charCodeAt(0));
 }
 
-/**
- * Obfuscate a string for storage
- * WARNING: This is NOT cryptographically secure encryption
- * For production, store credentials server-side only
- */
-export function obfuscate(plaintext: string): string {
-  if (!plaintext) return '';
+function obfuscateFallback(plaintext: string): string {
   const key = getObfuscationKey();
   const result: number[] = [];
   for (let i = 0; i < plaintext.length; i++) {
@@ -73,11 +188,7 @@ export function obfuscate(plaintext: string): string {
   return btoa(String.fromCharCode(...result));
 }
 
-/**
- * Deobfuscate a stored string
- */
-export function deobfuscate(obfuscated: string): string {
-  if (!obfuscated) return '';
+function deobfuscateFallback(obfuscated: string): string {
   try {
     const key = getObfuscationKey();
     const decoded = atob(obfuscated);
@@ -89,6 +200,27 @@ export function deobfuscate(obfuscated: string): string {
   } catch {
     return '';
   }
+}
+
+/**
+ * Synchronous obfuscate function for backward compatibility
+ * @deprecated Use encryptString for new implementations
+ *
+ * WARNING: This uses simple XOR obfuscation which is NOT cryptographically secure.
+ * For production with sensitive credentials, use server-side storage.
+ */
+export function obfuscate(plaintext: string): string {
+  if (!plaintext) return '';
+  return obfuscateFallback(plaintext);
+}
+
+/**
+ * Synchronous deobfuscate function for backward compatibility
+ * @deprecated Use decryptString for new implementations
+ */
+export function deobfuscate(obfuscated: string): string {
+  if (!obfuscated) return '';
+  return deobfuscateFallback(obfuscated);
 }
 
 /**
