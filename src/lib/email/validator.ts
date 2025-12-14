@@ -1,8 +1,12 @@
 /**
- * Email validation regex pattern
- * Supports standard email formats including subdomains and plus addressing
+ * RFC 5321 compliant email validation regex pattern
+ * - Validates total length (max 254 chars)
+ * - Validates local part length (max 64 chars)
+ * - Supports standard email formats including subdomains and plus addressing
+ * - Requires at least 2-char TLD
  */
-const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const EMAIL_REGEX =
+  /^(?=.{1,254}$)(?=.{1,64}@)[a-zA-Z0-9!#$%&'*+/=?^_`{|}~-]+(?:\.[a-zA-Z0-9!#$%&'*+/=?^_`{|}~-]+)*@(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$/;
 
 export interface ValidationResult {
   valid: string[];
