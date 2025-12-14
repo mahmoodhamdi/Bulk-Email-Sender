@@ -1,3 +1,5 @@
+import { escapeHtml } from '../crypto';
+
 const VALID_MERGE_TAGS = [
   'firstName',
   'lastName',
@@ -30,8 +32,12 @@ export interface ValidationResult {
   invalidTags: string[];
 }
 
+// Tags that should not be escaped (they contain HTML)
+const HTML_TAGS = ['unsubscribeLink', 'trackingPixel'];
+
 /**
  * Replace merge tags in content with actual values
+ * HTML escapes user-provided values to prevent XSS attacks
  */
 export function replaceMergeTags(content: string, data: MergeTagData): string {
   let result = content;
@@ -58,7 +64,15 @@ export function replaceMergeTags(content: string, data: MergeTagData): string {
     );
 
     if (matchingKey && data[matchingKey] !== undefined) {
-      return data[matchingKey] as string;
+      const value = data[matchingKey] as string;
+
+      // Skip escaping for HTML tags (unsubscribeLink, trackingPixel)
+      if (HTML_TAGS.some((tag) => tag.toLowerCase() === normalizedTagName)) {
+        return value;
+      }
+
+      // Escape HTML in user-provided values to prevent XSS
+      return escapeHtml(value);
     }
 
     // Return empty string for missing tags
