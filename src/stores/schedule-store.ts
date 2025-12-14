@@ -1,12 +1,30 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { generateShortId } from '@/lib/crypto';
+import {
+  TIMEZONES as TZ_LIST,
+  getLocalTimezone as getTz,
+  formatTimezoneDisplay as formatTz,
+  formatInTimezone,
+  parseTimeInTimezone,
+  getTimeUntil as getTimeRemaining,
+  type TimezoneInfo,
+} from '@/lib/timezone';
 
-export interface Timezone {
-  id: string;
-  label: string;
-  offset: string;
-  region: string;
+// Re-export timezone utilities for backward compatibility
+export const TIMEZONES = TZ_LIST;
+export const getLocalTimezone = getTz;
+export const formatTimezoneDisplay = formatTz;
+export const getTimeUntil = getTimeRemaining;
+
+// Format date for display (uses new DST-aware utility)
+export const formatScheduledDate = (date: Date, timezone: string): string => {
+  return formatInTimezone(date, timezone);
+};
+
+// Legacy type for backward compatibility
+export interface Timezone extends TimezoneInfo {
+  offset?: string; // Deprecated - offset is calculated dynamically now
 }
 
 export interface ScheduledCampaign {
@@ -60,124 +78,6 @@ interface ScheduleActions {
 
 type ScheduleStore = ScheduleState & ScheduleActions;
 
-// Common timezones with their display info
-export const TIMEZONES: Timezone[] = [
-  { id: 'UTC', label: 'UTC', offset: '+00:00', region: 'Universal' },
-  { id: 'America/New_York', label: 'Eastern Time', offset: '-05:00', region: 'Americas' },
-  { id: 'America/Chicago', label: 'Central Time', offset: '-06:00', region: 'Americas' },
-  { id: 'America/Denver', label: 'Mountain Time', offset: '-07:00', region: 'Americas' },
-  { id: 'America/Los_Angeles', label: 'Pacific Time', offset: '-08:00', region: 'Americas' },
-  { id: 'America/Anchorage', label: 'Alaska Time', offset: '-09:00', region: 'Americas' },
-  { id: 'Pacific/Honolulu', label: 'Hawaii Time', offset: '-10:00', region: 'Americas' },
-  { id: 'America/Sao_Paulo', label: 'Brasilia Time', offset: '-03:00', region: 'Americas' },
-  { id: 'Europe/London', label: 'London', offset: '+00:00', region: 'Europe' },
-  { id: 'Europe/Paris', label: 'Paris', offset: '+01:00', region: 'Europe' },
-  { id: 'Europe/Berlin', label: 'Berlin', offset: '+01:00', region: 'Europe' },
-  { id: 'Europe/Moscow', label: 'Moscow', offset: '+03:00', region: 'Europe' },
-  { id: 'Asia/Dubai', label: 'Dubai', offset: '+04:00', region: 'Asia' },
-  { id: 'Asia/Kolkata', label: 'India', offset: '+05:30', region: 'Asia' },
-  { id: 'Asia/Singapore', label: 'Singapore', offset: '+08:00', region: 'Asia' },
-  { id: 'Asia/Shanghai', label: 'China', offset: '+08:00', region: 'Asia' },
-  { id: 'Asia/Tokyo', label: 'Tokyo', offset: '+09:00', region: 'Asia' },
-  { id: 'Asia/Seoul', label: 'Seoul', offset: '+09:00', region: 'Asia' },
-  { id: 'Australia/Sydney', label: 'Sydney', offset: '+11:00', region: 'Oceania' },
-  { id: 'Australia/Perth', label: 'Perth', offset: '+08:00', region: 'Oceania' },
-  { id: 'Pacific/Auckland', label: 'Auckland', offset: '+13:00', region: 'Oceania' },
-  { id: 'Africa/Cairo', label: 'Cairo', offset: '+02:00', region: 'Africa' },
-  { id: 'Africa/Johannesburg', label: 'Johannesburg', offset: '+02:00', region: 'Africa' },
-  { id: 'Africa/Lagos', label: 'Lagos', offset: '+01:00', region: 'Africa' },
-];
-
-// Get user's local timezone
-export const getLocalTimezone = (): string => {
-  try {
-    return Intl.DateTimeFormat().resolvedOptions().timeZone;
-  } catch {
-    return 'UTC';
-  }
-};
-
-// Format timezone for display
-export const formatTimezoneDisplay = (timezoneId: string): string => {
-  const tz = TIMEZONES.find((t) => t.id === timezoneId);
-  if (tz) {
-    return `${tz.label} (${tz.offset})`;
-  }
-  return timezoneId;
-};
-
-// Convert local date/time to specific timezone
-export const convertToTimezone = (date: Date, fromTimezone: string, toTimezone: string): Date => {
-  try {
-    const dateStr = date.toLocaleString('en-US', { timeZone: fromTimezone });
-    const targetStr = new Date(dateStr).toLocaleString('en-US', { timeZone: toTimezone });
-    return new Date(targetStr);
-  } catch {
-    return date;
-  }
-};
-
-// Convert to UTC for storage
-export const toUTC = (date: Date, fromTimezone: string): Date => {
-  try {
-    // Create a formatter that outputs in the specified timezone
-    const formatter = new Intl.DateTimeFormat('en-US', {
-      timeZone: fromTimezone,
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-      hour12: false,
-    });
-
-    const parts = formatter.formatToParts(date);
-    const getPart = (type: string) => parts.find((p) => p.type === type)?.value || '0';
-
-    // Get the UTC offset for the timezone
-    const utcDate = new Date(date.toLocaleString('en-US', { timeZone: 'UTC' }));
-    const tzDate = new Date(date.toLocaleString('en-US', { timeZone: fromTimezone }));
-    const offset = utcDate.getTime() - tzDate.getTime();
-
-    return new Date(date.getTime() + offset);
-  } catch {
-    return date;
-  }
-};
-
-// Format date for display
-export const formatScheduledDate = (date: Date, timezone: string): string => {
-  try {
-    return new Intl.DateTimeFormat('en-US', {
-      timeZone: timezone,
-      weekday: 'long',
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-      timeZoneName: 'short',
-    }).format(date);
-  } catch {
-    return date.toISOString();
-  }
-};
-
-// Get time until scheduled date
-export const getTimeUntil = (scheduledAt: Date): { days: number; hours: number; minutes: number } | null => {
-  const now = new Date();
-  const diff = scheduledAt.getTime() - now.getTime();
-
-  if (diff <= 0) return null;
-
-  const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-  const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-  const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-
-  return { days, hours, minutes };
-};
-
 // Minimum time before sending (15 minutes)
 const MIN_SCHEDULE_BUFFER_MS = 15 * 60 * 1000;
 
@@ -227,11 +127,12 @@ export const useScheduleStore = create<ScheduleStore>()(
         const { selectedDate, selectedTime, selectedTimezone } = get();
         if (!selectedDate) return null;
 
-        const [hours, minutes] = selectedTime.split(':').map(Number);
-        const scheduledDate = new Date(selectedDate);
-        scheduledDate.setHours(hours, minutes, 0, 0);
-
-        return toUTC(scheduledDate, selectedTimezone);
+        try {
+          // Use DST-aware timezone parsing
+          return parseTimeInTimezone(selectedDate, selectedTime, selectedTimezone);
+        } catch {
+          return null;
+        }
       },
 
       validateSchedule: () => {
@@ -250,23 +151,24 @@ export const useScheduleStore = create<ScheduleStore>()(
           return { valid: false, error: 'Please select a valid time' };
         }
 
-        const scheduledDate = new Date(selectedDate);
-        scheduledDate.setHours(hours, minutes, 0, 0);
+        try {
+          // Convert to UTC using DST-aware parsing
+          const scheduledUTC = parseTimeInTimezone(selectedDate, selectedTime, selectedTimezone);
+          const now = new Date();
+          const minTime = new Date(now.getTime() + MIN_SCHEDULE_BUFFER_MS);
 
-        // Convert to UTC for comparison
-        const scheduledUTC = toUTC(scheduledDate, selectedTimezone);
-        const now = new Date();
-        const minTime = new Date(now.getTime() + MIN_SCHEDULE_BUFFER_MS);
+          if (scheduledUTC < now) {
+            return { valid: false, error: 'Cannot schedule in the past' };
+          }
 
-        if (scheduledUTC < now) {
-          return { valid: false, error: 'Cannot schedule in the past' };
+          if (scheduledUTC < minTime) {
+            return { valid: false, error: 'Schedule time must be at least 15 minutes in the future' };
+          }
+
+          return { valid: true };
+        } catch {
+          return { valid: false, error: 'Invalid date or timezone' };
         }
-
-        if (scheduledUTC < minTime) {
-          return { valid: false, error: 'Schedule time must be at least 15 minutes in the future' };
-        }
-
-        return { valid: true };
       },
 
       scheduleCampaign: (campaignId, campaignName) => {
@@ -282,10 +184,8 @@ export const useScheduleStore = create<ScheduleStore>()(
           return null;
         }
 
-        const [hours, minutes] = selectedTime.split(':').map(Number);
-        const scheduledDate = new Date(selectedDate!);
-        scheduledDate.setHours(hours, minutes, 0, 0);
-        const scheduledAtUTC = toUTC(scheduledDate, selectedTimezone);
+        // Use DST-aware timezone parsing
+        const scheduledAtUTC = parseTimeInTimezone(selectedDate!, selectedTime, selectedTimezone);
 
         const newSchedule: ScheduledCampaign = {
           id: `schedule-${generateShortId(12)}`,
