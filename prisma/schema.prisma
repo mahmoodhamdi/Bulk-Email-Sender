@@ -53,7 +53,7 @@ enum CampaignStatus {
 
 model Template {
   id          String   @id @default(cuid())
-  name        String
+  name        String   @unique
   subject     String?
   content     String   @db.Text
   thumbnail   String?
@@ -64,6 +64,8 @@ model Template {
   updatedAt   DateTime @updatedAt
 
   campaigns   Campaign[]
+
+  @@index([category])
 }
 
 model Contact {
@@ -88,6 +90,8 @@ model Contact {
 
   @@index([email])
   @@index([status])
+  @@index([firstName])
+  @@index([lastName])
 }
 
 enum ContactStatus {
@@ -99,7 +103,7 @@ enum ContactStatus {
 
 model ContactList {
   id          String   @id @default(cuid())
-  name        String
+  name        String   @unique
   description String?
   contactCount Int     @default(0)
 

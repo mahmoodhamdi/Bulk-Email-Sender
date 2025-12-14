@@ -7,9 +7,24 @@ const nextConfig: NextConfig = {
   output: 'standalone',
   images: {
     remotePatterns: [
+      // Only allow specific trusted image domains
+      // Add your CDN or image hosting domains here
       {
         protocol: 'https',
-        hostname: '**',
+        hostname: 'images.unsplash.com',
+      },
+      {
+        protocol: 'https',
+        hostname: 'cdn.example.com',
+      },
+      {
+        protocol: 'https',
+        hostname: '*.githubusercontent.com',
+      },
+      // Allow localhost for development
+      {
+        protocol: 'http',
+        hostname: 'localhost',
       },
     ],
   },
