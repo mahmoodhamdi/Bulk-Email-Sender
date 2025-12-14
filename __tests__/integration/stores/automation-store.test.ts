@@ -433,7 +433,7 @@ describe('Automation Store Integration', () => {
 
       // Verify chain
       let state = useAutomationStore.getState();
-      let s1 = state.currentAutomation!.steps.find((s) => s.id === step1);
+      const s1 = state.currentAutomation!.steps.find((s) => s.id === step1);
       let s2 = state.currentAutomation!.steps.find((s) => s.id === step2);
 
       expect(s1!.nextStepId).toBe(step2!);

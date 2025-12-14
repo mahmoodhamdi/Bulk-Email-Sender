@@ -51,7 +51,7 @@ describe('Reputation Store Integration', () => {
 
       // Step 1: Filter bounces by type
       store.setBounceFilter({ type: 'hard' });
-      let filtered = store.getFilteredBounces();
+      const filtered = store.getFilteredBounces();
       expect(filtered.every((b) => b.type === 'hard')).toBe(true);
 
       // Step 2: Remove a single bounce
