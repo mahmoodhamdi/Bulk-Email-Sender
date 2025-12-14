@@ -1,215 +1,294 @@
+'use client';
+
+import React, { useEffect } from 'react';
 import { useTranslations } from 'next-intl';
-import { setRequestLocale } from 'next-intl/server';
 import {
   Send,
   Mail,
   MousePointerClick,
   AlertTriangle,
   UserMinus,
+  TrendingUp,
+  RefreshCw,
+  Download,
+  BarChart3,
+  PieChart,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { PageLayout } from '@/components/layout/PageLayout';
+import {
+  MetricCard,
+  SimpleLineChart,
+  SimpleBarChart,
+  SimpleDonutChart,
+  CampaignTable,
+  ProgressBar,
+} from '@/components/analytics';
+import {
+  useAnalyticsStore,
+  formatNumber,
+  formatPercentage,
+  type DateRange,
+} from '@/stores/analytics-store';
+import { cn } from '@/lib/utils';
 
-interface PageProps {
-  params: Promise<{ locale: string }>;
-}
+export default function AnalyticsPage() {
+  const t = useTranslations('analytics');
+  const {
+    campaigns,
+    timeSeries,
+    emailClients,
+    devices,
+    topLinks,
+    summary,
+    comparison,
+    dateRange,
+    isLoading,
+    setDateRange,
+    loadAnalytics,
+    refreshAnalytics,
+    exportToCSV,
+  } = useAnalyticsStore();
 
-export default async function AnalyticsPage({ params }: PageProps) {
-  const { locale } = await params;
-  setRequestLocale(locale);
+  useEffect(() => {
+    loadAnalytics();
+  }, [loadAnalytics]);
 
-  return <AnalyticsContent />;
-}
-
-function AnalyticsContent() {
-  const t = useTranslations();
-
-  // Mock data - will be replaced with actual data from database
-  const metrics = [
-    {
-      title: t('analytics.metrics.sent'),
-      value: '45,291',
-      icon: Send,
-      change: '+12%',
-      color: 'text-blue-600',
-    },
-    {
-      title: t('analytics.metrics.delivered'),
-      value: '44,890',
-      subtitle: '99.1%',
-      icon: Mail,
-      change: '+0.5%',
-      color: 'text-green-600',
-    },
-    {
-      title: t('analytics.metrics.opened'),
-      value: '11,073',
-      subtitle: '24.5%',
-      icon: Mail,
-      change: '+2.1%',
-      color: 'text-purple-600',
-    },
-    {
-      title: t('analytics.metrics.clicked'),
-      value: '3,547',
-      subtitle: '7.9%',
-      icon: MousePointerClick,
-      change: '+1.2%',
-      color: 'text-orange-600',
-    },
-    {
-      title: t('analytics.metrics.bounced'),
-      value: '401',
-      subtitle: '0.9%',
-      icon: AlertTriangle,
-      change: '-0.2%',
-      color: 'text-red-600',
-    },
-    {
-      title: t('analytics.metrics.unsubscribed'),
-      value: '127',
-      subtitle: '0.3%',
-      icon: UserMinus,
-      change: '-0.1%',
-      color: 'text-yellow-600',
-    },
+  const dateRanges: { value: DateRange; label: string }[] = [
+    { value: '7d', label: t('last7days') },
+    { value: '30d', label: t('last30days') },
+    { value: '90d', label: t('last90days') },
+    { value: 'all', label: t('allTime') },
   ];
 
-  const dateRanges = ['last7days', 'last30days', 'last90days', 'allTime'];
+  const handleExport = () => {
+    const csv = exportToCSV();
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `analytics-${dateRange}-${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+    window.URL.revokeObjectURL(url);
+  };
+
+  // Prepare chart data
+  const opensChartData = timeSeries.map((d) => ({
+    label: new Date(d.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+    value: d.opens,
+  }));
+
+  const clicksChartData = timeSeries.map((d) => ({
+    label: new Date(d.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+    value: d.clicks,
+  }));
+
+  const emailClientColors = ['#3b82f6', '#8b5cf6', '#06b6d4', '#f59e0b', '#6b7280'];
+  const emailClientChartData = emailClients.map((ec, i) => ({
+    label: ec.client,
+    value: ec.count,
+    color: emailClientColors[i % emailClientColors.length],
+  }));
+
+  const deviceColors = ['#22c55e', '#3b82f6', '#f59e0b'];
+  const deviceChartData = devices.map((d, i) => ({
+    label: d.device,
+    value: d.count,
+    color: deviceColors[i % deviceColors.length],
+  }));
 
   return (
     <PageLayout
-      title={t('analytics.title')}
-      subtitle={t('analytics.subtitle')}
+      title={t('title')}
+      subtitle={t('subtitle')}
       actions={
-        <div className="flex gap-2">
-          {dateRanges.map((range) => (
-            <Button
-              key={range}
-              variant={range === 'last30days' ? 'default' : 'outline'}
-              size="sm"
-            >
-              {t(`analytics.${range}`)}
-            </Button>
-          ))}
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex rounded-lg border p-1">
+            {dateRanges.map((range) => (
+              <Button
+                key={range.value}
+                variant={dateRange === range.value ? 'default' : 'ghost'}
+                size="sm"
+                onClick={() => setDateRange(range.value)}
+                className="text-xs"
+              >
+                {range.label}
+              </Button>
+            ))}
+          </div>
+          <Button variant="outline" size="sm" onClick={refreshAnalytics} disabled={isLoading}>
+            <RefreshCw className={cn('h-4 w-4 mr-2', isLoading && 'animate-spin')} />
+            {t('refresh')}
+          </Button>
+          <Button variant="outline" size="sm" onClick={handleExport}>
+            <Download className="h-4 w-4 mr-2" />
+            {t('export')}
+          </Button>
         </div>
       }
     >
-      {/* Metrics Grid */}
+      {/* Key Metrics Grid */}
       <div className="mb-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-        {metrics.map((metric) => (
-          <Card key={metric.title}>
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <metric.icon className={`h-5 w-5 ${metric.color}`} />
-                <span className="text-xs text-green-600">{metric.change}</span>
+        <MetricCard
+          title={t('metrics.sent')}
+          value={formatNumber(summary.totalSent)}
+          change={comparison?.changes.sentChange}
+          changeLabel={t('vsPrevious')}
+          icon={<Send className="h-5 w-5" />}
+        />
+        <MetricCard
+          title={t('metrics.deliveryRate')}
+          value={summary.deliveryRate}
+          format="percentage"
+          change={comparison?.changes.deliveryRateChange}
+          icon={<Mail className="h-5 w-5" />}
+        />
+        <MetricCard
+          title={t('metrics.openRate')}
+          value={summary.openRate}
+          format="percentage"
+          change={comparison?.changes.openRateChange}
+          icon={<Mail className="h-5 w-5" />}
+        />
+        <MetricCard
+          title={t('metrics.clickRate')}
+          value={summary.clickRate}
+          format="percentage"
+          change={comparison?.changes.clickRateChange}
+          icon={<MousePointerClick className="h-5 w-5" />}
+        />
+        <MetricCard
+          title={t('metrics.bounceRate')}
+          value={summary.bounceRate}
+          format="percentage"
+          change={comparison?.changes.bounceRateChange}
+          icon={<AlertTriangle className="h-5 w-5" />}
+          inverseColors
+        />
+        <MetricCard
+          title={t('metrics.unsubscribeRate')}
+          value={summary.unsubscribeRate}
+          format="percentage"
+          icon={<UserMinus className="h-5 w-5" />}
+          inverseColors
+        />
+      </div>
+
+      {/* Charts Row 1 */}
+      <div className="grid gap-6 lg:grid-cols-2 mb-6">
+        <SimpleLineChart
+          data={opensChartData}
+          title={t('charts.opensOverTime')}
+          description={t('opensDescription')}
+          color="#8b5cf6"
+          height={220}
+        />
+        <SimpleLineChart
+          data={clicksChartData}
+          title={t('charts.clicksOverTime')}
+          description={t('clicksDescription')}
+          color="#22c55e"
+          height={220}
+        />
+      </div>
+
+      {/* Charts Row 2 */}
+      <div className="grid gap-6 lg:grid-cols-3 mb-6">
+        <SimpleDonutChart
+          data={emailClientChartData}
+          title={t('charts.emailClients')}
+          description={t('emailClientsDescription')}
+          centerValue={formatNumber(summary.totalOpened)}
+          centerLabel={t('totalOpens')}
+        />
+        <SimpleDonutChart
+          data={deviceChartData}
+          title={t('charts.devices')}
+          description={t('devicesDescription')}
+          centerValue={formatNumber(summary.totalClicked)}
+          centerLabel={t('totalClicks')}
+        />
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <TrendingUp className="h-4 w-4" />
+              {t('charts.topLinks')}
+            </CardTitle>
+            <CardDescription>{t('topLinksDescription')}</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {topLinks.slice(0, 5).map((link, i) => (
+              <ProgressBar
+                key={i}
+                value={link.clicks}
+                max={topLinks[0]?.clicks || 100}
+                label={link.url.replace(/^https?:\/\//, '').slice(0, 30) + '...'}
+                color={i === 0 ? '#22c55e' : '#3b82f6'}
+              />
+            ))}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Performance Summary */}
+      <div className="grid gap-6 lg:grid-cols-4 mb-6">
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center gap-4">
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-blue-100 dark:bg-blue-900/30">
+                <BarChart3 className="h-6 w-6 text-blue-600" />
               </div>
-              <p className="mt-2 text-2xl font-bold">{metric.value}</p>
-              {metric.subtitle && (
-                <p className="text-sm text-muted-foreground">{metric.subtitle}</p>
-              )}
-              <p className="mt-1 text-xs text-muted-foreground">{metric.title}</p>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-
-      {/* Charts Section */}
-      <div className="grid gap-6 lg:grid-cols-2">
-        {/* Opens Over Time */}
-        <Card>
-          <CardHeader>
-            <CardTitle>{t('analytics.charts.opensOverTime')}</CardTitle>
-            <CardDescription>{t('analytics.last30days')}</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="flex h-64 items-center justify-center rounded-lg bg-muted">
-              <p className="text-muted-foreground">
-                Chart will be rendered here using Recharts
-              </p>
+              <div>
+                <p className="text-sm text-muted-foreground">{t('totalEmails')}</p>
+                <p className="text-2xl font-bold">{formatNumber(summary.totalSent)}</p>
+              </div>
             </div>
           </CardContent>
         </Card>
-
-        {/* Clicks Over Time */}
         <Card>
-          <CardHeader>
-            <CardTitle>{t('analytics.charts.clicksOverTime')}</CardTitle>
-            <CardDescription>{t('analytics.last30days')}</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="flex h-64 items-center justify-center rounded-lg bg-muted">
-              <p className="text-muted-foreground">
-                Chart will be rendered here using Recharts
-              </p>
+          <CardContent className="pt-6">
+            <div className="flex items-center gap-4">
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-green-100 dark:bg-green-900/30">
+                <Mail className="h-6 w-6 text-green-600" />
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">{t('totalDelivered')}</p>
+                <p className="text-2xl font-bold">{formatNumber(summary.totalDelivered)}</p>
+              </div>
             </div>
           </CardContent>
         </Card>
-
-        {/* Top Clicked Links */}
         <Card>
-          <CardHeader>
-            <CardTitle>{t('analytics.charts.topLinks')}</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {[
-                { url: 'https://example.com/product', clicks: 1234 },
-                { url: 'https://example.com/pricing', clicks: 856 },
-                { url: 'https://example.com/signup', clicks: 642 },
-                { url: 'https://example.com/demo', clicks: 421 },
-                { url: 'https://example.com/contact', clicks: 394 },
-              ].map((link) => (
-                <div
-                  key={link.url}
-                  className="flex items-center justify-between rounded-lg border p-3"
-                >
-                  <span className="truncate text-sm">{link.url}</span>
-                  <span className="ml-4 text-sm font-medium">{link.clicks}</span>
-                </div>
-              ))}
+          <CardContent className="pt-6">
+            <div className="flex items-center gap-4">
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-purple-100 dark:bg-purple-900/30">
+                <Mail className="h-6 w-6 text-purple-600" />
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">{t('totalOpened')}</p>
+                <p className="text-2xl font-bold">{formatNumber(summary.totalOpened)}</p>
+              </div>
             </div>
           </CardContent>
         </Card>
-
-        {/* Email Clients */}
         <Card>
-          <CardHeader>
-            <CardTitle>{t('analytics.charts.emailClients')}</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {[
-                { client: 'Gmail', percentage: 45 },
-                { client: 'Apple Mail', percentage: 25 },
-                { client: 'Outlook', percentage: 18 },
-                { client: 'Yahoo Mail', percentage: 8 },
-                { client: 'Other', percentage: 4 },
-              ].map((item) => (
-                <div key={item.client} className="space-y-1">
-                  <div className="flex justify-between text-sm">
-                    <span>{item.client}</span>
-                    <span>{item.percentage}%</span>
-                  </div>
-                  <div className="h-2 rounded-full bg-muted">
-                    <div
-                      className="h-2 rounded-full bg-primary"
-                      style={{ width: `${item.percentage}%` }}
-                    />
-                  </div>
-                </div>
-              ))}
+          <CardContent className="pt-6">
+            <div className="flex items-center gap-4">
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-orange-100 dark:bg-orange-900/30">
+                <MousePointerClick className="h-6 w-6 text-orange-600" />
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">{t('totalClicked')}</p>
+                <p className="text-2xl font-bold">{formatNumber(summary.totalClicked)}</p>
+              </div>
             </div>
           </CardContent>
         </Card>
       </div>
+
+      {/* Campaign Performance Table */}
+      <CampaignTable campaigns={campaigns} onExport={handleExport} />
     </PageLayout>
   );
 }
