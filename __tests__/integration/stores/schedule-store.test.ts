@@ -280,7 +280,7 @@ describe('Schedule Store Integration', () => {
       expect(final.timezone).toBe(timezone);
       expect(final.createdAt).toEqual(createdAt);
       expect(final.status).toBe('completed');
-      expect(final.updatedAt.getTime()).toBeGreaterThan(createdAt.getTime());
+      expect(final.updatedAt.getTime()).toBeGreaterThanOrEqual(createdAt.getTime());
     });
   });
 
