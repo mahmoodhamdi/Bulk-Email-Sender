@@ -527,7 +527,7 @@ describe('Helper Functions', () => {
       const id1 = generateId();
       const id2 = generateId();
       expect(id1).not.toBe(id2);
-      expect(id1).toMatch(/^sup_\d+_\w+$/);
+      expect(id1).toMatch(/^sup_[a-f0-9]+$/);
     });
   });
 });

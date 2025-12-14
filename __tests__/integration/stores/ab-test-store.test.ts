@@ -17,7 +17,7 @@ describe('A/B Test Store Integration', () => {
     it('should handle complete A/B test workflow', () => {
       // Create a new test
       useABTestStore.getState().createTest('campaign-123');
-      let currentTest = useABTestStore.getState().currentTest;
+      const currentTest = useABTestStore.getState().currentTest;
       expect(currentTest).not.toBeNull();
       expect(currentTest!.campaignId).toBe('campaign-123');
 

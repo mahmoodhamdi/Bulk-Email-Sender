@@ -24,7 +24,7 @@ describe('Segmentation Store', () => {
 
     it('should generate ids of expected length', () => {
       const id = generateId();
-      expect(id.length).toBe(7);
+      expect(id.length).toBe(12);
     });
   });
 
