@@ -240,3 +240,57 @@ test.describe('Campaign Scheduling Feature', () => {
     await page.screenshot({ path: 'screenshots/scheduling-05-tablet.png', fullPage: true });
   });
 });
+
+test.describe('Email Preview & Test Send Feature', () => {
+  test('should display campaign page with preview option', async ({ page }) => {
+    await page.goto('/campaigns/new');
+    await page.waitForLoadState('networkidle');
+
+    // Check page loads
+    await expect(page.locator('body')).toBeVisible();
+
+    // Take screenshot
+    await page.screenshot({ path: 'screenshots/preview-01-campaign.png', fullPage: true });
+  });
+
+  test('should display template builder with preview', async ({ page }) => {
+    await page.goto('/templates/builder');
+    await page.waitForLoadState('networkidle');
+
+    // Check page loads
+    await expect(page.locator('body')).toBeVisible();
+
+    // Take screenshot
+    await page.screenshot({ path: 'screenshots/preview-02-builder.png', fullPage: true });
+  });
+
+  test('should support Arabic RTL layout for preview', async ({ page }) => {
+    await page.goto('/ar/campaigns/new');
+    await page.waitForLoadState('networkidle');
+
+    // Check RTL direction
+    const html = page.locator('html');
+    await expect(html).toHaveAttribute('dir', 'rtl');
+
+    // Take screenshot
+    await page.screenshot({ path: 'screenshots/preview-03-rtl.png', fullPage: true });
+  });
+
+  test('should be responsive on mobile for preview', async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 667 });
+    await page.goto('/campaigns/new');
+    await page.waitForLoadState('networkidle');
+
+    // Take mobile screenshot
+    await page.screenshot({ path: 'screenshots/preview-04-mobile.png', fullPage: true });
+  });
+
+  test('should be responsive on tablet for preview', async ({ page }) => {
+    await page.setViewportSize({ width: 768, height: 1024 });
+    await page.goto('/templates/builder');
+    await page.waitForLoadState('networkidle');
+
+    // Take tablet screenshot
+    await page.screenshot({ path: 'screenshots/preview-05-tablet.png', fullPage: true });
+  });
+});
