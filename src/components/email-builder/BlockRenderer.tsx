@@ -3,6 +3,7 @@
 import * as React from 'react';
 import { useEmailBuilderStore, type EmailBlock } from '@/stores/email-builder-store';
 import { cn } from '@/lib/utils';
+import { sanitizeHtml } from '@/lib/crypto';
 import { GripVertical, Trash2, Copy } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
@@ -57,7 +58,7 @@ export function BlockRenderer({ block, index }: BlockRendererProps) {
         return (
           <div
             style={styles}
-            dangerouslySetInnerHTML={{ __html: block.content }}
+            dangerouslySetInnerHTML={{ __html: sanitizeHtml(block.content) }}
           />
         );
 

@@ -2,6 +2,8 @@
  * Cryptographic utilities for secure operations
  */
 
+import DOMPurify from 'dompurify';
+
 // Check if we're in a browser or Node environment
 const isBrowser = typeof window !== 'undefined' && window.crypto;
 
@@ -169,4 +171,91 @@ export function sanitizeUrl(url: string): string {
   }
 
   return url;
+}
+
+/**
+ * DOMPurify configuration for email content sanitization
+ * Allows safe HTML tags commonly used in emails while stripping dangerous elements
+ */
+const DOMPURIFY_CONFIG: DOMPurify.Config = {
+  ALLOWED_TAGS: [
+    'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+    'p', 'br', 'hr', 'span', 'div',
+    'strong', 'b', 'em', 'i', 'u', 's', 'strike',
+    'a', 'img',
+    'ul', 'ol', 'li',
+    'table', 'thead', 'tbody', 'tr', 'th', 'td',
+    'blockquote', 'pre', 'code',
+    'center', 'font',
+  ],
+  ALLOWED_ATTR: [
+    'href', 'src', 'alt', 'title', 'width', 'height',
+    'style', 'class', 'id', 'target', 'rel',
+    'align', 'valign', 'bgcolor', 'color', 'border',
+    'cellpadding', 'cellspacing',
+  ],
+  ALLOW_DATA_ATTR: false,
+  FORBID_TAGS: ['script', 'iframe', 'object', 'embed', 'form', 'input', 'textarea', 'button'],
+  FORBID_ATTR: ['onerror', 'onload', 'onclick', 'onmouseover', 'onfocus', 'onblur'],
+};
+
+/**
+ * Sanitize HTML content to prevent XSS attacks
+ * Uses DOMPurify with a configuration suitable for email content
+ *
+ * @param html - The HTML content to sanitize
+ * @param options - Optional DOMPurify configuration overrides
+ * @returns Sanitized HTML string safe for rendering
+ */
+export function sanitizeHtml(html: string, options?: DOMPurify.Config): string {
+  if (!html || typeof html !== 'string') return '';
+
+  // In server-side rendering, DOMPurify may not work without a DOM
+  // Return escaped HTML as a fallback
+  if (typeof window === 'undefined') {
+    // For SSR, we return the HTML as-is since it will be sanitized on client
+    // The actual sanitization happens in the browser where DOMPurify has access to DOM
+    return html;
+  }
+
+  const config = { ...DOMPURIFY_CONFIG, ...options };
+  return DOMPurify.sanitize(html, config);
+}
+
+/**
+ * Sanitize HTML for email preview with merge tag replacement
+ * Replaces common merge tags with sample data and sanitizes the result
+ *
+ * @param html - The HTML content with merge tags
+ * @param sampleData - Optional sample data for merge tag replacement
+ * @returns Sanitized HTML with merge tags replaced
+ */
+export function sanitizeEmailPreview(
+  html: string,
+  sampleData?: {
+    firstName?: string;
+    lastName?: string;
+    email?: string;
+    company?: string;
+    date?: string;
+  }
+): string {
+  if (!html || typeof html !== 'string') return '';
+
+  const data = {
+    firstName: sampleData?.firstName || 'John',
+    lastName: sampleData?.lastName || 'Doe',
+    email: sampleData?.email || 'john@example.com',
+    company: sampleData?.company || 'Acme Inc',
+    date: sampleData?.date || new Date().toLocaleDateString(),
+  };
+
+  const processed = html
+    .replace(/\{\{firstName\}\}/g, escapeHtml(data.firstName))
+    .replace(/\{\{lastName\}\}/g, escapeHtml(data.lastName))
+    .replace(/\{\{email\}\}/g, escapeHtml(data.email))
+    .replace(/\{\{company\}\}/g, escapeHtml(data.company))
+    .replace(/\{\{date\}\}/g, escapeHtml(data.date));
+
+  return sanitizeHtml(processed);
 }

@@ -22,6 +22,7 @@ import { useScheduleStore, formatScheduledDate, getTimeUntil } from '@/stores/sc
 import { SegmentList } from '@/components/segmentation/SegmentList';
 import { ScheduleSelector, ScheduleSummary } from '@/components/campaign/ScheduleSelector';
 import { cn } from '@/lib/utils';
+import { sanitizeEmailPreview } from '@/lib/crypto';
 
 const STEPS = ['setup', 'content', 'recipients', 'review'] as const;
 
@@ -448,12 +449,7 @@ function ContentStep({
             <div className="rounded-md border bg-white p-4 max-h-64 overflow-y-auto">
               <div
                 dangerouslySetInnerHTML={{
-                  __html: draft.content
-                    .replace(/\{\{firstName\}\}/g, 'John')
-                    .replace(/\{\{lastName\}\}/g, 'Doe')
-                    .replace(/\{\{email\}\}/g, 'john@example.com')
-                    .replace(/\{\{company\}\}/g, 'Acme Inc')
-                    .replace(/\{\{date\}\}/g, new Date().toLocaleDateString()),
+                  __html: sanitizeEmailPreview(draft.content),
                 }}
               />
             </div>
@@ -778,11 +774,7 @@ function ReviewStep({
             <div className="max-h-48 overflow-y-auto rounded-md bg-muted p-4">
               <div
                 dangerouslySetInnerHTML={{
-                  __html: draft.content
-                    .replace(/\{\{firstName\}\}/g, 'John')
-                    .replace(/\{\{lastName\}\}/g, 'Doe')
-                    .replace(/\{\{email\}\}/g, 'john@example.com')
-                    .substring(0, 500) + '...',
+                  __html: sanitizeEmailPreview(draft.content.substring(0, 500) + '...'),
                 }}
               />
             </div>
