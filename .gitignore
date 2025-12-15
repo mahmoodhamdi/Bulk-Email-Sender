@@ -53,3 +53,6 @@ test-results
 
 # Prisma local config
 prisma.config.ts
+
+# Credentials (template contains placeholder values only)
+DEPLOYMENT_CREDENTIALS.template.md
