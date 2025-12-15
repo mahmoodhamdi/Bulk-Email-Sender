@@ -100,8 +100,8 @@ Add these secrets in your GitHub repository settings: **Settings > Secrets and v
 | `REDIS_URL` | Redis connection string |
 | `GOOGLE_CLIENT_ID` | Google OAuth Client ID |
 | `GOOGLE_CLIENT_SECRET` | Google OAuth Client Secret |
-| `GITHUB_CLIENT_ID` | GitHub OAuth Client ID |
-| `GITHUB_CLIENT_SECRET` | GitHub OAuth Client Secret |
+| `GH_OAUTH_CLIENT_ID` | GitHub OAuth Client ID (Note: GitHub doesn't allow secrets starting with `GITHUB_`) |
+| `GH_OAUTH_CLIENT_SECRET` | GitHub OAuth Client Secret |
 | `FIREBASE_SERVICE_ACCOUNT` | Firebase service account JSON (stringified) |
 | `NEXT_PUBLIC_FIREBASE_API_KEY` | Firebase Web API Key |
 | `NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN` | Firebase Auth Domain |
