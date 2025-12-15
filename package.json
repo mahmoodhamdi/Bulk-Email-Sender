@@ -23,6 +23,7 @@
     "worker:dev": "tsx watch src/worker.ts"
   },
   "dependencies": {
+    "@auth/prisma-adapter": "^2.11.1",
     "@prisma/client": "^6.10.0",
     "@radix-ui/react-checkbox": "^1.1.4",
     "@radix-ui/react-dialog": "^1.1.14",
@@ -45,6 +46,7 @@
     "@tiptap/react": "^2.20.0",
     "@tiptap/starter-kit": "^2.20.0",
     "@types/dompurify": "^3.0.5",
+    "bcryptjs": "^3.0.3",
     "bullmq": "^5.37.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
@@ -53,6 +55,7 @@
     "ioredis": "^5.6.0",
     "lucide-react": "^0.500.0",
     "next": "16.0.8",
+    "next-auth": "^5.0.0-beta.30",
     "next-intl": "^4.1.0",
     "nodemailer": "^7.0.0",
     "papaparse": "^5.5.0",
@@ -71,6 +74,7 @@
     "@testing-library/jest-dom": "^6.6.0",
     "@testing-library/react": "^16.3.0",
     "@testing-library/user-event": "^14.6.1",
+    "@types/bcryptjs": "^2.4.6",
     "@types/node": "^20",
     "@types/nodemailer": "^6.4.17",
     "@types/papaparse": "^5.3.15",

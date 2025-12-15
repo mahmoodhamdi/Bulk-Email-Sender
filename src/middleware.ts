@@ -16,6 +16,7 @@ const PUBLIC_API_ROUTES = [
   '/api/tracking/click',
   '/api/tracking/unsubscribe',
   '/api/tracking/webhook',
+  '/api/auth', // NextAuth.js routes handle their own CSRF
 ];
 
 export default function middleware(request: NextRequest) {
