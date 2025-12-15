@@ -159,6 +159,36 @@ export const GET = withAuth(async (request, context) => {
 }, { requiredPermission: 'campaigns:read' });
 ```
 
+### Firebase Integration
+Firebase is used for push notifications (FCM) and can optionally integrate with authentication.
+
+Files in `src/lib/firebase/`:
+- `admin.ts` - Firebase Admin SDK (server-side): FCM, Auth verification
+- `client.ts` - Firebase client SDK (browser): FCM, Google Auth
+- `index.ts` - Exports all Firebase utilities
+
+FCM API routes:
+- `POST /api/fcm/token` - Register FCM token for push notifications
+- `DELETE /api/fcm/token` - Unregister FCM token
+- `GET /api/fcm/token` - List user's FCM tokens
+- `POST /api/fcm/send` - Send push notification (admin for broadcast)
+- `POST /api/fcm/topic` - Subscribe to topic
+- `DELETE /api/fcm/topic` - Unsubscribe from topic
+
+Client-side hook:
+```typescript
+import { useFCM } from '@/hooks/useFCM';
+
+function MyComponent() {
+  const { token, requestPermission, isSupported } = useFCM({
+    autoRegister: true,
+    onMessage: (payload) => console.log('Notification:', payload),
+  });
+}
+```
+
+Service worker: `public/firebase-messaging-sw.js` handles background notifications.
+
 ### Internationalization
 Two locales: English (en) and Arabic (ar) with RTL support. Config in `src/i18n/config.ts`. Routes use `[locale]` dynamic segment with `localePrefix: 'as-needed'`.
 

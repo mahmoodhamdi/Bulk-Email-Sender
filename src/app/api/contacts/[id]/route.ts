@@ -108,7 +108,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     // Check if contact exists
     const existing = await prisma.contact.findUnique({
       where: { id },
-      select: { id: true, email: true },
+      select: { id: true, email: true, userId: true },
     });
 
     if (!existing) {
@@ -122,10 +122,14 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     const body = await request.json();
     const validated = updateContactSchema.parse(body);
 
-    // If email is being updated, check for duplicates
+    // If email is being updated, check for duplicates within the same user's contacts
     if (validated.email && validated.email !== existing.email) {
-      const emailExists = await prisma.contact.findUnique({
-        where: { email: validated.email },
+      const emailExists = await prisma.contact.findFirst({
+        where: {
+          email: validated.email,
+          userId: existing.userId,
+          id: { not: id },
+        },
       });
       if (emailExists) {
         return NextResponse.json(

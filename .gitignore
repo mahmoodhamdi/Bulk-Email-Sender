@@ -56,3 +56,7 @@ prisma.config.ts
 
 # Credentials (template contains placeholder values only)
 DEPLOYMENT_CREDENTIALS.template.md
+
+# Firebase credentials
+*-firebase-adminsdk-*.json
+firebase-service-account.json
