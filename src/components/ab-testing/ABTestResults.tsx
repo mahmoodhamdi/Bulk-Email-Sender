@@ -18,11 +18,40 @@ export function ABTestResults({ testId, onSelectWinner }: ABTestResultsProps) {
   const { currentTest, loadTest, selectWinner, calculateWinner, getVariantStats } =
     useABTestStore();
 
+  const [timeRemaining, setTimeRemaining] = React.useState<string | null>(null);
+
   React.useEffect(() => {
     if (testId && (!currentTest || currentTest.id !== testId)) {
       loadTest(testId);
     }
   }, [testId, currentTest, loadTest]);
+
+  React.useEffect(() => {
+    if (!currentTest?.startedAt) {
+      setTimeRemaining(null);
+      return;
+    }
+
+    const calculateRemaining = () => {
+      const startTime = new Date(currentTest.startedAt!).getTime();
+      const endTime = startTime + currentTest.testDuration * 60 * 60 * 1000;
+      const remaining = endTime - Date.now();
+
+      if (remaining <= 0) {
+        setTimeRemaining(t('abTest.testComplete'));
+        return;
+      }
+
+      const hours = Math.floor(remaining / (1000 * 60 * 60));
+      const minutes = Math.floor((remaining % (1000 * 60 * 60)) / (1000 * 60));
+      setTimeRemaining(`${hours}h ${minutes}m ${t('abTest.remaining')}`);
+    };
+
+    calculateRemaining();
+    const interval = setInterval(calculateRemaining, 60000); // Update every minute
+
+    return () => clearInterval(interval);
+  }, [currentTest?.startedAt, currentTest?.testDuration, t]);
 
   if (!currentTest) {
     return (
@@ -58,17 +87,6 @@ export function ABTestResults({ testId, onSelectWinner }: ABTestResultsProps) {
     }
   };
 
-  const getTimeRemaining = () => {
-    if (!currentTest.startedAt) return null;
-    const startTime = new Date(currentTest.startedAt).getTime();
-    const endTime = startTime + currentTest.testDuration * 60 * 60 * 1000;
-    const remaining = endTime - Date.now();
-    if (remaining <= 0) return t('abTest.testComplete');
-    const hours = Math.floor(remaining / (1000 * 60 * 60));
-    const minutes = Math.floor((remaining % (1000 * 60 * 60)) / (1000 * 60));
-    return `${hours}h ${minutes}m ${t('abTest.remaining')}`;
-  };
-
   return (
     <div className="space-y-6">
       {/* Test Status Header */}
@@ -95,11 +113,11 @@ export function ABTestResults({ testId, onSelectWinner }: ABTestResultsProps) {
             </div>
           </div>
         </CardHeader>
-        {isRunning && (
+        {isRunning && timeRemaining && (
           <CardContent>
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <Clock className="h-4 w-4" />
-              {getTimeRemaining()}
+              {timeRemaining}
             </div>
           </CardContent>
         )}

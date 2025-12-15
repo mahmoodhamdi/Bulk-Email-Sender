@@ -40,5 +40,6 @@ export type TranslationValues = Record<string, string | number | Date>;
 
 // Declare module augmentation for next-intl
 declare module 'next-intl' {
+  // eslint-disable-next-line @typescript-eslint/no-empty-object-type
   interface IntlMessages extends Messages {}
 }
