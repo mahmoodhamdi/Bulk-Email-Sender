@@ -82,9 +82,10 @@ npm install --legacy-peer-deps
 Use `@/*` to import from `src/*` (e.g., `import { cn } from '@/lib/utils'`)
 
 ### Database Schema (Prisma)
-Key models: Campaign, Template, Contact, ContactList, ContactListMember, Recipient, EmailEvent, SmtpConfig, Unsubscribe.
+Key models: User, Account, Session, VerificationToken, ApiKey, Campaign, Template, Contact, ContactList, ContactListMember, Recipient, EmailEvent, SmtpConfig, Unsubscribe.
 
 Enums:
+- UserRole: USER, ADMIN, SUPER_ADMIN
 - CampaignStatus: DRAFT, SCHEDULED, SENDING, PAUSED, COMPLETED, CANCELLED
 - ContactStatus: ACTIVE, UNSUBSCRIBED, BOUNCED, COMPLAINED
 - RecipientStatus: PENDING, QUEUED, SENT, DELIVERED, OPENED, CLICKED, BOUNCED, FAILED, UNSUBSCRIBED
@@ -98,8 +99,65 @@ Enums:
 ### Middleware
 `src/middleware.ts` handles:
 - CSRF protection for API routes (validates token from `X-CSRF-Token` header)
-- Public API routes exempt from CSRF: `/api/health`, `/api/track`, `/api/unsubscribe`
+- Public API routes exempt from CSRF: `/api/health`, `/api/track`, `/api/unsubscribe`, `/api/auth`
 - Internationalization routing via next-intl
+
+### Authentication System
+The app uses NextAuth.js v5 for authentication with multiple providers and API key support.
+
+Files in `src/lib/auth/`:
+- `config.ts` - NextAuth configuration, password hashing, role checking utilities
+- `index.ts` - Main auth exports with type augmentation
+- `api-key.ts` - API key generation, validation, rate limiting
+- `middleware.ts` - Auth middleware for protecting routes
+
+Authentication methods:
+- Email/Password (credentials provider)
+- Google OAuth (optional, requires env vars)
+- GitHub OAuth (optional, requires env vars)
+- API Key (for programmatic access, prefix: `bes_`)
+
+Auth API routes:
+- `POST /api/auth/register` - User registration
+- `GET /api/auth/me` - Get current user profile
+- `PATCH /api/auth/me` - Update profile
+- `PUT /api/auth/me` - Change password
+- `GET /api/auth/api-keys` - List user's API keys
+- `POST /api/auth/api-keys` - Create API key
+- `GET /api/auth/api-keys/[id]` - Get API key details
+- `PATCH /api/auth/api-keys/[id]` - Update API key
+- `DELETE /api/auth/api-keys/[id]` - Delete API key
+
+Admin routes (requires ADMIN or SUPER_ADMIN role):
+- `GET /api/admin/users` - List all users (pagination, search, filters)
+- `GET /api/admin/users/[id]` - Get user details
+- `PATCH /api/admin/users/[id]` - Update user
+- `DELETE /api/admin/users/[id]` - Delete user (SUPER_ADMIN only)
+
+Role hierarchy:
+- USER - Standard user
+- ADMIN - Can manage users
+- SUPER_ADMIN - Full access, can manage admins
+
+API Key permissions:
+- `campaigns:read`, `campaigns:write`, `campaigns:delete`, `campaigns:send`
+- `contacts:read`, `contacts:write`, `contacts:delete`
+- `templates:read`, `templates:write`, `templates:delete`
+- `analytics:read`, `settings:read`, `settings:write`
+
+Auth utilities:
+```typescript
+import { auth, isAdmin, isSuperAdmin, withAuth } from '@/lib/auth';
+
+// Session-based auth
+const session = await auth();
+if (isAdmin(session)) { /* admin logic */ }
+
+// API route protection with withAuth HOC
+export const GET = withAuth(async (request, context) => {
+  // context.userId, context.userRole available
+}, { requiredPermission: 'campaigns:read' });
+```
 
 ### Internationalization
 Two locales: English (en) and Arabic (ar) with RTL support. Config in `src/i18n/config.ts`. Routes use `[locale]` dynamic segment with `localePrefix: 'as-needed'`.
@@ -164,6 +222,16 @@ Required:
 - `REDIS_URL` - Redis connection string
 - `NEXT_PUBLIC_APP_URL` - Application URL
 - `TRACKING_URL` - Email tracking endpoint URL
+
+Required for authentication:
+- `NEXTAUTH_SECRET` - Secret for NextAuth.js (generate with: openssl rand -base64 32)
+- `NEXTAUTH_URL` - Application URL for NextAuth.js (same as NEXT_PUBLIC_APP_URL)
+
+Optional OAuth providers:
+- `GOOGLE_CLIENT_ID` - Google OAuth client ID
+- `GOOGLE_CLIENT_SECRET` - Google OAuth client secret
+- `GITHUB_CLIENT_ID` - GitHub OAuth client ID
+- `GITHUB_CLIENT_SECRET` - GitHub OAuth client secret
 
 Optional:
 - `NEXT_PUBLIC_CONTACT_EMAIL` - Contact email for footer
