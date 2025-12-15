@@ -121,8 +121,8 @@ export async function POST(request: NextRequest) {
     // Single contact creation
     const validated = createContactSchema.parse(body);
 
-    // Check for existing contact
-    const existing = await prisma.contact.findUnique({
+    // Check for existing contact (email must be unique per user, or globally if no user)
+    const existing = await prisma.contact.findFirst({
       where: { email: validated.email },
     });
 
@@ -190,14 +190,14 @@ async function handleBulkImport(body: unknown) {
         // Merge default tags with contact tags
         const tags = [...new Set([...contactData.tags, ...(defaultTags || [])])];
 
-        const existing = await prisma.contact.findUnique({
+        const existing = await prisma.contact.findFirst({
           where: { email: contactData.email },
         });
 
         if (existing) {
           if (updateExisting) {
             await prisma.contact.update({
-              where: { email: contactData.email },
+              where: { id: existing.id },
               data: {
                 firstName: contactData.firstName ?? existing.firstName,
                 lastName: contactData.lastName ?? existing.lastName,

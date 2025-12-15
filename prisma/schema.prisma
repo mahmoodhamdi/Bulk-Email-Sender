@@ -25,6 +25,7 @@ model User {
   accounts      Account[]
   sessions      Session[]
   apiKeys       ApiKey[]
+  fcmTokens     FcmToken[]
 
   // Relations to existing models (optional - for multi-tenant support)
   campaigns     Campaign[]
@@ -103,6 +104,29 @@ model ApiKey {
   @@index([key])
   @@index([keyPrefix])
   @@index([userId])
+}
+
+model FcmToken {
+  id          String    @id @default(cuid())
+  token       String    @unique
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Device info
+  platform    String?   // web, android, ios
+  browser     String?
+  os          String?
+
+  // Status
+  isActive    Boolean   @default(true)
+  lastUsedAt  DateTime?
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([token])
+  @@index([userId])
+  @@index([isActive])
 }
 
 // ==================== Application Models ====================

@@ -29,7 +29,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Check if already unsubscribed
-    const contact = await prisma.contact.findUnique({
+    const contact = await prisma.contact.findFirst({
       where: { email: unsubscribe.email },
     });
 
@@ -43,7 +43,7 @@ export async function GET(request: NextRequest) {
     // Update contact status
     if (contact) {
       await prisma.contact.update({
-        where: { email: unsubscribe.email },
+        where: { id: contact.id },
         data: {
           status: 'UNSUBSCRIBED',
           unsubscribedAt: new Date(),
@@ -138,13 +138,13 @@ export async function POST(request: NextRequest) {
     }
 
     // Update contact status
-    const contact = await prisma.contact.findUnique({
+    const contact = await prisma.contact.findFirst({
       where: { email: unsubscribe.email },
     });
 
     if (contact) {
       await prisma.contact.update({
-        where: { email: unsubscribe.email },
+        where: { id: contact.id },
         data: {
           status: 'UNSUBSCRIBED',
           unsubscribedAt: new Date(),

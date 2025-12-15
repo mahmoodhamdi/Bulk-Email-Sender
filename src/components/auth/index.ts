@@ -1,0 +1,1 @@
+export { FirebaseSignInButton } from './FirebaseSignInButton';

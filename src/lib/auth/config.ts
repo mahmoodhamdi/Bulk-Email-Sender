@@ -4,6 +4,7 @@ import Google from 'next-auth/providers/google';
 import GitHub from 'next-auth/providers/github';
 import bcrypt from 'bcryptjs';
 import { prisma } from '@/lib/db/prisma';
+import { verifyIdToken, getFirebaseUser } from '@/lib/firebase/admin';
 
 /**
  * NextAuth.js configuration
@@ -50,6 +51,141 @@ export const authConfig: NextAuthConfig = {
           image: user.image,
           role: user.role,
         };
+      },
+    }),
+
+    // Firebase Auth provider - accepts Firebase ID token and verifies with Firebase Admin
+    Credentials({
+      id: 'firebase',
+      name: 'Firebase',
+      credentials: {
+        idToken: { label: 'Firebase ID Token', type: 'text' },
+      },
+      async authorize(credentials) {
+        if (!credentials?.idToken) {
+          return null;
+        }
+
+        try {
+          const idToken = credentials.idToken as string;
+
+          // Verify the Firebase ID token
+          const decodedToken = await verifyIdToken(idToken);
+
+          if (!decodedToken) {
+            return null;
+          }
+
+          // Get additional user info from Firebase
+          const firebaseUser = await getFirebaseUser(decodedToken.uid);
+
+          // Find or create user in database
+          let user = await prisma.user.findFirst({
+            where: {
+              OR: [
+                { email: firebaseUser.email },
+                {
+                  accounts: {
+                    some: {
+                      provider: 'firebase',
+                      providerAccountId: decodedToken.uid
+                    }
+                  }
+                },
+              ],
+            },
+            include: { accounts: true },
+          });
+
+          if (!user && firebaseUser.email) {
+            // Create new user
+            user = await prisma.user.create({
+              data: {
+                email: firebaseUser.email,
+                name: firebaseUser.displayName || firebaseUser.email.split('@')[0],
+                image: firebaseUser.photoURL,
+                emailVerified: firebaseUser.emailVerified ? new Date() : null,
+                accounts: {
+                  create: {
+                    type: 'oauth',
+                    provider: 'firebase',
+                    providerAccountId: decodedToken.uid,
+                    access_token: idToken,
+                    token_type: 'bearer',
+                    id_token: idToken,
+                  },
+                },
+              },
+              include: { accounts: true },
+            });
+          } else if (user) {
+            // Check if firebase account exists
+            const hasFirebaseAccount = user.accounts?.some(
+              (acc) => acc.provider === 'firebase' && acc.providerAccountId === decodedToken.uid
+            );
+
+            if (!hasFirebaseAccount) {
+              // Link Firebase account to existing user
+              await prisma.account.create({
+                data: {
+                  userId: user.id,
+                  type: 'oauth',
+                  provider: 'firebase',
+                  providerAccountId: decodedToken.uid,
+                  access_token: idToken,
+                  token_type: 'bearer',
+                  id_token: idToken,
+                },
+              });
+            } else {
+              // Update existing account with new token
+              await prisma.account.updateMany({
+                where: {
+                  userId: user.id,
+                  provider: 'firebase',
+                  providerAccountId: decodedToken.uid,
+                },
+                data: {
+                  access_token: idToken,
+                  id_token: idToken,
+                },
+              });
+            }
+
+            // Update user info if changed
+            if (
+              firebaseUser.displayName !== user.name ||
+              firebaseUser.photoURL !== user.image
+            ) {
+              await prisma.user.update({
+                where: { id: user.id },
+                data: {
+                  name: firebaseUser.displayName || user.name,
+                  image: firebaseUser.photoURL || user.image,
+                },
+              });
+            }
+          }
+
+          if (!user) {
+            return null;
+          }
+
+          if (!user.isActive) {
+            throw new Error('Account is disabled');
+          }
+
+          return {
+            id: user.id,
+            email: user.email,
+            name: user.name,
+            image: user.image,
+            role: user.role,
+          };
+        } catch (error) {
+          console.error('[Auth] Firebase token verification failed:', error);
+          return null;
+        }
       },
     }),
 
