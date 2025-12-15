@@ -18,7 +18,9 @@
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:push": "prisma db push",
-    "db:studio": "prisma studio"
+    "db:studio": "prisma studio",
+    "worker": "tsx src/worker.ts",
+    "worker:dev": "tsx watch src/worker.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.10.0",
@@ -82,6 +84,7 @@
     "jsdom": "^26.0.0",
     "prisma": "^6.10.0",
     "tailwindcss": "^4",
+    "tsx": "^4.19.0",
     "typescript": "^5",
     "vitest": "^3.2.0"
   }
