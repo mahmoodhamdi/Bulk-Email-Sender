@@ -13,8 +13,8 @@ import {
   formatScheduledDate,
   getTimeUntil,
   getLocalTimezone,
-  formatTimezoneDisplay,
 } from '@/stores/schedule-store';
+import { formatTimezoneOffset } from '@/lib/timezone';
 import { cn } from '@/lib/utils';
 
 interface ScheduleSelectorProps {
@@ -199,7 +199,7 @@ export function ScheduleSelector({ className, showCountdown = true, onScheduleCh
                   <optgroup key={region} label={region}>
                     {timezones.map((tz) => (
                       <option key={tz.id} value={tz.id}>
-                        {tz.label} ({tz.offset})
+                        {tz.label} ({formatTimezoneOffset(tz.id)})
                       </option>
                     ))}
                   </optgroup>

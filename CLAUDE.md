@@ -50,15 +50,21 @@ npm install --legacy-peer-deps
 - `src/lib/` - Core libraries
   - `src/lib/email/` - Email sending logic (sender, merge-tags, validator)
   - `src/lib/db/` - Database utilities (Prisma client singleton)
-  - `src/lib/crypto.ts` - Secure ID generation, XOR obfuscation, HTML/CSV escaping
+  - `src/lib/crypto.ts` - Secure ID generation, AES-GCM encryption, HTML/CSV escaping, DOMPurify sanitization
   - `src/lib/rate-limit.ts` - In-memory rate limiting with pre-configured limiters
+  - `src/lib/csrf.ts` - CSRF token generation and validation
+  - `src/lib/config.ts` - Type-safe environment variable access
+  - `src/lib/timezone.ts` - Timezone utilities
 - `src/components/` - React components
   - `ui/` - Radix UI primitives (button, card, dialog, etc.)
-  - `email-builder/` - Drag-and-drop email builder (Canvas, BlockPalette, PropertiesPanel)
+  - `email-builder/` - Drag-and-drop email builder (Canvas, BlockPalette, PropertiesPanel, BlockRenderer)
   - `analytics/` - Charts, MetricCard, CampaignTable
-  - `automation/` - Workflow builder, automation steps
+  - `automation/` - Workflow builder (WorkflowBuilder, StepConfigPanel, AutomationList)
   - `reputation/` - Deliverability metrics, bounce manager, blacklist checker
+  - `preview/` - Email preview (DeviceToggle, SpamScoreCard, TestSendDialog, PersonalizationPicker)
+  - `unsubscribe/` - Unsubscribe management (UnsubscribeForm, SuppressionList)
 - `src/stores/` - Zustand stores for client-side state
+- `src/hooks/` - Custom React hooks (useCsrf, useTheme, usePagination)
 - `src/i18n/` - Internationalization config (next-intl)
 - `src/messages/` - Translation files (en.json, ar.json)
 - `prisma/` - Database schema (PostgreSQL)
@@ -82,6 +88,12 @@ Enums:
 - `src/lib/email/merge-tags.ts` - Template variable processing ({{firstName}}, {{lastName}}, {{email}}, {{company}}, {{customField1}}, {{customField2}}, {{unsubscribeLink}}, {{date}})
 - `src/lib/email/validator.ts` - Email validation
 
+### Middleware
+`src/middleware.ts` handles:
+- CSRF protection for API routes (validates token from `X-CSRF-Token` header)
+- Public API routes exempt from CSRF: `/api/health`, `/api/track`, `/api/unsubscribe`
+- Internationalization routing via next-intl
+
 ### Internationalization
 Two locales: English (en) and Arabic (ar) with RTL support. Config in `src/i18n/config.ts`. Routes use `[locale]` dynamic segment with `localePrefix: 'as-needed'`.
 
@@ -98,6 +110,14 @@ Pre-configured limiters in `src/lib/rate-limit.ts`:
 - `smtpTestRateLimiter`: 5 req/5min
 - `emailSendRateLimiter`: 10 req/min
 
+### Security Utilities
+`src/lib/crypto.ts` provides:
+- `generateSecureId()` / `generateShortId()` - Cryptographically secure IDs
+- `encryptString()` / `decryptString()` - AES-GCM encryption with PBKDF2 key derivation
+- `sanitizeHtml()` - DOMPurify-based HTML sanitization for email content
+- `escapeHtml()` / `escapeCSV()` - XSS and CSV injection prevention
+- `sanitizeUrl()` - Block javascript:/data:/vbscript: URLs
+
 ## Testing Strategy
 
 - Unit tests: `__tests__/unit/` - jsdom environment, `src/test/setup.ts`
@@ -113,3 +133,10 @@ Required:
 - `REDIS_URL` - Redis connection string
 - `NEXT_PUBLIC_APP_URL` - Application URL
 - `TRACKING_URL` - Email tracking endpoint URL
+
+Optional:
+- `NEXT_PUBLIC_CONTACT_EMAIL` - Contact email for footer
+- `NEXT_PUBLIC_SUPPORT_EMAIL` - Support email
+- `NEXT_PUBLIC_CONTACT_PHONE` - Contact phone
+- `NEXT_PUBLIC_TRACK_OPENS` - Enable open tracking (default: true)
+- `NEXT_PUBLIC_TRACK_CLICKS` - Enable click tracking (default: true)

@@ -72,17 +72,18 @@ export const TRANSLATION_NAMESPACES: readonly MessageNamespace[] = [
   'contacts',
   'settings',
   'analytics',
-  'emailBuilder',
   'preview',
   'schedule',
-  'validation',
   'errors',
-  'success',
+  'footer',
+  'meta',
   'segmentation',
-  'abTesting',
+  'abTest',
   'automation',
   'reputation',
   'unsubscribe',
+  'apiDocs',
+  'tracking',
 ] as const;
 
 /**

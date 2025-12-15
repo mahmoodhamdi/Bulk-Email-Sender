@@ -350,8 +350,9 @@ export function sanitizeHtml(html: string, options?: DOMPurify.Config): string {
     return html;
   }
 
-  const config = { ...DOMPURIFY_CONFIG, ...options };
-  return DOMPurify.sanitize(html, config);
+  // Type assertion needed due to DOMPurify type definition mismatches between esm and cjs
+  const config = { ...DOMPURIFY_CONFIG, ...options } as unknown as Parameters<typeof DOMPurify.sanitize>[1];
+  return DOMPurify.sanitize(html, config) as string;
 }
 
 /**
