@@ -46,7 +46,14 @@ npm install --legacy-peer-deps
 ### Directory Structure
 - `src/app/` - Next.js App Router pages and API routes
   - `src/app/[locale]/` - Locale-based pages (i18n routing)
-  - `src/app/api/` - API route handlers (health, smtp/test, email/test)
+  - `src/app/api/` - API route handlers
+    - `campaigns/` - Campaign CRUD, send, queue-status
+    - `contacts/` - Contact CRUD with bulk import
+    - `templates/` - Template CRUD with duplicate
+    - `tracking/` - Open/click tracking, webhooks
+    - `queue/` - Queue health and management
+    - `smtp/test` - SMTP connection test
+    - `email/test` - Test email sending
 - `src/lib/` - Core libraries
   - `src/lib/email/` - Email sending logic (sender, merge-tags, validator)
   - `src/lib/db/` - Database utilities (Prisma client singleton)
@@ -99,6 +106,30 @@ Two locales: English (en) and Arabic (ar) with RTL support. Config in `src/i18n/
 
 ### Queue System
 Uses BullMQ with Redis for email queue processing.
+
+Files in `src/lib/queue/`:
+- `types.ts` - Queue types, job data interfaces, SMTP rate limits
+- `redis.ts` - Redis connection manager (singleton pattern)
+- `email-queue.ts` - BullMQ queue instance and operations
+- `email-worker.ts` - Worker for processing email jobs
+- `queue-service.ts` - High-level queue operations (queueCampaign, pauseCampaign, etc.)
+- `index.ts` - Exports all queue functionality
+
+Worker commands:
+```bash
+npm run worker        # Start email worker (production)
+npm run worker:dev    # Start email worker with watch mode (development)
+```
+
+Worker environment variables:
+- `WORKER_CONCURRENCY` - Number of concurrent jobs (default: 5)
+- `WORKER_RATE_LIMIT_MAX` - Max jobs per duration (default: 10)
+- `WORKER_RATE_LIMIT_DURATION` - Rate limit window in ms (default: 1000)
+
+SMTP Provider Rate Limits (emails/minute):
+- Gmail: 100, Outlook: 300, Yahoo: 100
+- SendGrid: 600, Mailgun: 600, SES: 200
+- Zoho: 150, Custom: 60
 
 ### State Management
 Zustand stores in `src/stores/`: campaign, analytics, schedule, preview, ab-test, automation, segmentation, email-builder, reputation, unsubscribe, settings.
