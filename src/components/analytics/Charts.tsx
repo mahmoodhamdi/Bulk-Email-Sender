@@ -236,21 +236,29 @@ export function SimpleDonutChart({
 }: DonutChartProps) {
   const { segments, total } = useMemo(() => {
     const tot = data.reduce((sum, d) => sum + d.value, 0);
-    let currentAngle = -90; // Start from top
 
-    const segs = data.map((item) => {
+    const segs = data.reduce<Array<{
+      label: string;
+      value: number;
+      color: string;
+      percentage: number;
+      startAngle: number;
+      endAngle: number;
+    }>>((acc, item, index) => {
       const percentage = tot > 0 ? (item.value / tot) * 100 : 0;
       const angle = (percentage / 100) * 360;
-      const startAngle = currentAngle;
-      currentAngle += angle;
+      const startAngle = index === 0 ? -90 : acc[index - 1].endAngle;
+      const endAngle = startAngle + angle;
 
-      return {
+      acc.push({
         ...item,
         percentage,
         startAngle,
-        endAngle: currentAngle,
-      };
-    });
+        endAngle,
+      });
+
+      return acc;
+    }, []);
 
     return { segments: segs, total: tot };
   }, [data]);

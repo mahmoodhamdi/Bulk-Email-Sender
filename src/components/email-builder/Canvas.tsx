@@ -1,6 +1,6 @@
 'use client';
 
-import { useEmailBuilderStore, createDefaultBlock } from '@/stores/email-builder-store';
+import { useEmailBuilderStore, createDefaultBlock, type BlockType } from '@/stores/email-builder-store';
 import { BlockRenderer } from './BlockRenderer';
 import { cn } from '@/lib/utils';
 import { Monitor, Smartphone, Plus } from 'lucide-react';
@@ -26,7 +26,7 @@ export function Canvas() {
     e.preventDefault();
     const blockType = e.dataTransfer.getData('blockType');
     if (blockType) {
-      const block = createDefaultBlock(blockType as any);
+      const block = createDefaultBlock(blockType as BlockType);
       addBlock(block);
     }
   };

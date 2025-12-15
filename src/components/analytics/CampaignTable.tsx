@@ -114,7 +114,7 @@ export function CampaignTable({
     }
   };
 
-  const SortIcon = ({ field }: { field: SortField }) => {
+  const renderSortIcon = (field: SortField) => {
     if (sortField !== field) return null;
     return sortDirection === 'asc' ? (
       <ChevronUp className="h-4 w-4" />
@@ -184,7 +184,7 @@ export function CampaignTable({
                     className="flex items-center gap-1 font-medium text-sm hover:text-primary"
                   >
                     {t('campaignName')}
-                    <SortIcon field="name" />
+                    {renderSortIcon('name')}
                   </button>
                 </th>
                 <th className="pb-3 px-4">
@@ -196,7 +196,7 @@ export function CampaignTable({
                     className="flex items-center gap-1 font-medium text-sm hover:text-primary"
                   >
                     {t('metrics.sent')}
-                    <SortIcon field="sent" />
+                    {renderSortIcon('sent')}
                   </button>
                 </th>
                 <th className="pb-3 px-4">
@@ -205,7 +205,7 @@ export function CampaignTable({
                     className="flex items-center gap-1 font-medium text-sm hover:text-primary"
                   >
                     {t('metrics.openRate')}
-                    <SortIcon field="openRate" />
+                    {renderSortIcon('openRate')}
                   </button>
                 </th>
                 <th className="pb-3 px-4">
@@ -214,7 +214,7 @@ export function CampaignTable({
                     className="flex items-center gap-1 font-medium text-sm hover:text-primary"
                   >
                     {t('metrics.clickRate')}
-                    <SortIcon field="clickRate" />
+                    {renderSortIcon('clickRate')}
                   </button>
                 </th>
                 <th className="pb-3 px-4">
@@ -226,7 +226,7 @@ export function CampaignTable({
                     className="flex items-center gap-1 font-medium text-sm hover:text-primary"
                   >
                     {t('date')}
-                    <SortIcon field="sentAt" />
+                    {renderSortIcon('sentAt')}
                   </button>
                 </th>
                 <th className="pb-3 pl-4"></th>

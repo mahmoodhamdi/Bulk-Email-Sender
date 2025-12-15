@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { useEmailBuilderStore, createDefaultBlock, generateId } from '@/stores/email-builder-store';
+import { useEmailBuilderStore, createDefaultBlock, generateId, type TextBlock } from '@/stores/email-builder-store';
 
 describe('Email Builder Store', () => {
   beforeEach(() => {
@@ -165,7 +165,7 @@ describe('Email Builder Store', () => {
       useEmailBuilderStore.getState().updateBlock(block.id, { content: 'Updated content' });
 
       const state = useEmailBuilderStore.getState();
-      expect((state.template.blocks[0] as any).content).toBe('Updated content');
+      expect((state.template.blocks[0] as TextBlock).content).toBe('Updated content');
     });
 
     it('should remove block', () => {
@@ -216,7 +216,7 @@ describe('Email Builder Store', () => {
       const state = useEmailBuilderStore.getState();
       expect(state.template.blocks).toHaveLength(2);
       expect(state.template.blocks[0].id).not.toBe(state.template.blocks[1].id);
-      expect((state.template.blocks[0] as any).content).toBe((state.template.blocks[1] as any).content);
+      expect((state.template.blocks[0] as TextBlock).content).toBe((state.template.blocks[1] as TextBlock).content);
     });
   });
 
