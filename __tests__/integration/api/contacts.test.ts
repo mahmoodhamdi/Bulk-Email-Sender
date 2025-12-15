@@ -85,7 +85,7 @@ describe('Contacts API Routes', () => {
         createdAt: new Date(),
       };
 
-      vi.mocked(prisma.contact.findUnique).mockResolvedValue(null);
+      vi.mocked(prisma.contact.findFirst).mockResolvedValue(null);
       vi.mocked(prisma.contact.create).mockResolvedValue(newContact as never);
 
       const request = new NextRequest('http://localhost:3000/api/contacts', {
@@ -105,7 +105,7 @@ describe('Contacts API Routes', () => {
     });
 
     it('should return 409 for duplicate email', async () => {
-      vi.mocked(prisma.contact.findUnique).mockResolvedValue({
+      vi.mocked(prisma.contact.findFirst).mockResolvedValue({
         id: 'existing',
         email: 'existing@example.com',
       } as never);
