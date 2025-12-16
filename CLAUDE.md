@@ -85,7 +85,7 @@ npm install --legacy-peer-deps
 Use `@/*` to import from `src/*` (e.g., `import { cn } from '@/lib/utils'`)
 
 ### Database Schema (Prisma)
-Key models: User, Account, Session, VerificationToken, ApiKey, Campaign, Template, Contact, ContactList, ContactListMember, Recipient, EmailEvent, SmtpConfig, Unsubscribe, Webhook, WebhookDelivery.
+Key models: User, Account, Session, VerificationToken, ApiKey, Campaign, Template, TemplateVersion, Contact, ContactList, ContactListMember, Recipient, EmailEvent, SmtpConfig, Unsubscribe, Webhook, WebhookDelivery.
 
 Enums:
 - UserRole: USER, ADMIN, SUPER_ADMIN
@@ -95,6 +95,7 @@ Enums:
 - EventType: SENT, DELIVERED, OPENED, CLICKED, BOUNCED, UNSUBSCRIBED, COMPLAINED
 - WebhookAuthType: NONE, BASIC, BEARER, API_KEY, HMAC
 - WebhookDeliveryStatus: PENDING, PROCESSING, DELIVERED, FAILED, RETRYING
+- VersionChangeType: CREATE, UPDATE, REVERT
 
 ### Email System
 - `src/lib/email/sender.ts` - SMTP integration with Nodemailer, factory pattern via `createEmailSender()`. Supports presets: gmail, outlook, yahoo, sendgrid, mailgun, ses, zoho
@@ -294,6 +295,42 @@ Worker command:
 npm run webhook-worker     # Start webhook worker (production)
 npm run webhook-worker:dev # Start with watch mode (development)
 ```
+
+### Template Versioning
+Automatic version history for email templates with revert and compare functionality.
+
+Files in `src/lib/template/`:
+- `version-service.ts` - Version management (create, list, compare, revert)
+- `index.ts` - Exports all template utilities
+
+Database models (Prisma):
+- `TemplateVersion` - Version snapshots (name, subject, content, category, changeType, changeSummary)
+- `Template.currentVersion` - Tracks latest version number
+
+Version API routes:
+- `GET /api/templates/[id]/versions` - List versions with pagination
+- `GET /api/templates/[id]/versions/[version]` - Get version details
+- `POST /api/templates/[id]/versions/[version]/revert` - Revert to version
+- `GET /api/templates/[id]/versions/compare?v1=X&v2=Y` - Compare two versions
+
+Usage:
+```typescript
+import { createVersion, getVersions, revertToVersion, compareVersions } from '@/lib/template';
+
+// Versions are created automatically on template updates
+// List versions
+const { versions, total } = await getVersions(templateId, { page: 1, limit: 20 });
+
+// Compare two versions
+const comparison = await compareVersions(templateId, 1, 3);
+
+// Revert to a previous version (creates new version)
+const { version, template } = await revertToVersion(templateId, 2, userId);
+```
+
+Change types: `CREATE` (initial), `UPDATE` (content changed), `REVERT` (restored from version)
+
+Auto-generated change summaries: "Updated content", "Changed subject and content", etc.
 
 ### State Management
 Zustand stores in `src/stores/`: campaign, analytics, schedule, preview, ab-test, automation, segmentation, email-builder, reputation, unsubscribe, settings.

@@ -16,6 +16,13 @@ vi.mock('@/lib/db/prisma', () => ({
       delete: vi.fn(),
       count: vi.fn(),
     },
+    templateVersion: {
+      create: vi.fn(),
+      findUnique: vi.fn(),
+      findMany: vi.fn(),
+      count: vi.fn(),
+    },
+    $transaction: vi.fn((operations) => Promise.all(operations)),
   },
 }));
 
@@ -101,6 +108,16 @@ describe('Templates API Routes', () => {
 
       vi.mocked(prisma.template.findFirst).mockResolvedValue(null);
       vi.mocked(prisma.template.create).mockResolvedValue(newTemplate as never);
+      vi.mocked(prisma.templateVersion.create).mockResolvedValue({
+        id: 'v1',
+        templateId: 'tpl-new',
+        version: 1,
+        name: 'New Template',
+        content: '<p>Content</p>',
+        changeType: 'CREATE',
+        changeSummary: 'Initial version',
+        createdAt: new Date(),
+      } as never);
 
       const request = new NextRequest('http://localhost:3000/api/templates', {
         method: 'POST',
@@ -145,6 +162,16 @@ describe('Templates API Routes', () => {
         id: 'tpl-new',
         name: 'Default Template',
         isDefault: true,
+      } as never);
+      vi.mocked(prisma.templateVersion.create).mockResolvedValue({
+        id: 'v1',
+        templateId: 'tpl-new',
+        version: 1,
+        name: 'Default Template',
+        content: '<p>Content</p>',
+        changeType: 'CREATE',
+        changeSummary: 'Initial version',
+        createdAt: new Date(),
       } as never);
 
       const request = new NextRequest('http://localhost:3000/api/templates', {
@@ -199,14 +226,39 @@ describe('Templates API Routes', () => {
 
   describe('PUT /api/templates/[id]', () => {
     it('should update a template', async () => {
-      vi.mocked(prisma.template.findUnique).mockResolvedValue({
-        id: 'tpl-1',
-        name: 'Old Name',
-      } as never);
+      // First call: check if template exists and get versioned fields
+      // Second call: version service gets currentVersion
+      vi.mocked(prisma.template.findUnique)
+        .mockResolvedValueOnce({
+          id: 'tpl-1',
+          name: 'Old Name',
+          subject: null,
+          content: '<p>Old content</p>',
+          thumbnail: null,
+          category: null,
+          userId: null,
+        } as never)
+        .mockResolvedValueOnce({
+          id: 'tpl-1',
+          currentVersion: 1,
+        } as never);
       vi.mocked(prisma.template.findFirst).mockResolvedValue(null);
       vi.mocked(prisma.template.update).mockResolvedValue({
         id: 'tpl-1',
         name: 'Updated Name',
+        subject: null,
+        content: '<p>Old content</p>',
+        thumbnail: null,
+        category: null,
+      } as never);
+      vi.mocked(prisma.templateVersion.create).mockResolvedValue({
+        id: 'v2',
+        templateId: 'tpl-1',
+        version: 2,
+        name: 'Updated Name',
+        changeType: 'UPDATE',
+        changeSummary: 'Updated name',
+        createdAt: new Date(),
       } as never);
 
       const request = new NextRequest('http://localhost:3000/api/templates/tpl-1', {
@@ -296,6 +348,17 @@ describe('Templates API Routes', () => {
         name: 'Copy of Template',
         content: '<p>Content</p>',
         isDefault: false,
+        userId: null,
+      } as never);
+      vi.mocked(prisma.templateVersion.create).mockResolvedValue({
+        id: 'v1',
+        templateId: 'tpl-copy',
+        version: 1,
+        name: 'Copy of Template',
+        content: '<p>Content</p>',
+        changeType: 'CREATE',
+        changeSummary: 'Initial version',
+        createdAt: new Date(),
       } as never);
 
       const request = new NextRequest('http://localhost:3000/api/templates/tpl-1', {
