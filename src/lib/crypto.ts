@@ -203,27 +203,6 @@ function deobfuscateFallback(obfuscated: string): string {
 }
 
 /**
- * Synchronous obfuscate function for backward compatibility
- * @deprecated Use encryptString for new implementations
- *
- * WARNING: This uses simple XOR obfuscation which is NOT cryptographically secure.
- * For production with sensitive credentials, use server-side storage.
- */
-export function obfuscate(plaintext: string): string {
-  if (!plaintext) return '';
-  return obfuscateFallback(plaintext);
-}
-
-/**
- * Synchronous deobfuscate function for backward compatibility
- * @deprecated Use decryptString for new implementations
- */
-export function deobfuscate(obfuscated: string): string {
-  if (!obfuscated) return '';
-  return deobfuscateFallback(obfuscated);
-}
-
-/**
  * Hash a string using SHA-256 (async, for browser)
  */
 export async function hashString(str: string): Promise<string> {

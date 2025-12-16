@@ -1,6 +1,5 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { obfuscate, deobfuscate } from '@/lib/crypto';
 import { CSRF_HEADER_NAME, CSRF_COOKIE_NAME } from '@/lib/csrf';
 
 // Helper to get CSRF token from cookies
@@ -27,10 +26,8 @@ export interface SmtpConfig {
   fromName: string;
 }
 
-// Internal interface for stored SMTP config with obfuscated password
-interface StoredSmtpConfig extends Omit<SmtpConfig, 'password'> {
-  _obfuscatedPassword?: string;
-}
+// Internal interface for stored SMTP config (password is not persisted for security)
+type StoredSmtpConfig = Omit<SmtpConfig, 'password'>;
 
 export interface SendingSettings {
   batchSize: number;
@@ -196,12 +193,9 @@ export const useSettingsStore = create<SettingsStore>()(
     {
       name: 'bulk-email-settings',
       partialize: (state) => {
-        // Obfuscate password before storing
-        const { password, ...smtpWithoutPassword } = state.smtp;
-        const storedSmtp: StoredSmtpConfig = {
-          ...smtpWithoutPassword,
-          _obfuscatedPassword: password ? obfuscate(password) : undefined,
-        };
+        // Don't persist password for security - user will need to re-enter it
+        const { password: _password, ...smtpWithoutPassword } = state.smtp;
+        const storedSmtp: StoredSmtpConfig = smtpWithoutPassword;
         return {
           smtp: storedSmtp,
           sending: state.sending,
@@ -211,12 +205,8 @@ export const useSettingsStore = create<SettingsStore>()(
       },
       onRehydrateStorage: () => (state) => {
         if (state) {
-          // Deobfuscate password on load
-          const storedSmtp = state.smtp as unknown as StoredSmtpConfig;
-          if (storedSmtp._obfuscatedPassword) {
-            state.smtp.password = deobfuscate(storedSmtp._obfuscatedPassword);
-            delete (state.smtp as unknown as StoredSmtpConfig)._obfuscatedPassword;
-          }
+          // Initialize password as empty string on load
+          state.smtp.password = '';
         }
       },
     }
