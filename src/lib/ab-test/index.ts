@@ -4,4 +4,5 @@
  */
 
 export * from './ab-test-service';
+export * from './ab-test-executor';
 export * from './types';
