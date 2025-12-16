@@ -33,6 +33,7 @@ model User {
   contacts      Contact[]
   contactLists  ContactList[]
   smtpConfigs   SmtpConfig[]
+  webhooks      Webhook[]
 
   @@index([email])
   @@index([role])
@@ -381,4 +382,90 @@ model Unsubscribe {
 
   @@index([email])
   @@index([token])
+}
+
+// ==================== Webhook Models ====================
+
+model Webhook {
+  id          String   @id @default(cuid())
+  name        String
+  url         String   // Target URL for POST requests
+  secret      String?  // Optional secret for HMAC signature verification
+
+  // Events this webhook subscribes to
+  events      String[] @default([]) // e.g., ["email.opened", "email.clicked"]
+
+  // Authentication
+  authType    WebhookAuthType @default(NONE)
+  authHeader  String?  // Header name for auth (e.g., "Authorization")
+  authValue   String?  // Encrypted auth value (e.g., "Bearer xxx")
+
+  // Configuration
+  isActive    Boolean  @default(true)
+  timeout     Int      @default(30000) // Request timeout in ms
+  maxRetries  Int      @default(3)
+
+  // Filters (optional - limit to specific campaigns/contacts)
+  campaignIds String[] @default([])
+  contactListIds String[] @default([])
+
+  // Owner
+  userId      String?
+  user        User?    @relation(fields: [userId], references: [id])
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  deliveries  WebhookDelivery[]
+
+  @@unique([name, userId])
+  @@index([userId])
+  @@index([isActive])
+}
+
+enum WebhookAuthType {
+  NONE
+  BASIC      // Basic authentication
+  BEARER     // Bearer token
+  API_KEY    // Custom header with API key
+  HMAC       // HMAC signature in header
+}
+
+model WebhookDelivery {
+  id          String   @id @default(cuid())
+  webhookId   String
+  webhook     Webhook  @relation(fields: [webhookId], references: [id], onDelete: Cascade)
+
+  // Event details
+  event       String   // e.g., "email.opened"
+  payload     Json     // The data sent to the webhook
+
+  // Delivery status
+  status      WebhookDeliveryStatus @default(PENDING)
+  attempts    Int      @default(0)
+
+  // Response details
+  statusCode  Int?
+  response    String?  @db.Text
+  error       String?
+
+  // Timing
+  scheduledAt DateTime @default(now())
+  deliveredAt DateTime?
+  nextRetryAt DateTime?
+
+  createdAt   DateTime @default(now())
+
+  @@index([webhookId])
+  @@index([status])
+  @@index([event])
+  @@index([createdAt])
+}
+
+enum WebhookDeliveryStatus {
+  PENDING
+  PROCESSING
+  DELIVERED
+  FAILED
+  RETRYING
 }

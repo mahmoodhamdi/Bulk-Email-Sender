@@ -4,8 +4,6 @@ import {
   createEmptyVariant,
   createEmptyTest,
   generateId,
-  type ABTest,
-  type ABVariant,
 } from '@/stores/ab-test-store';
 
 describe('A/B Test Store Integration', () => {

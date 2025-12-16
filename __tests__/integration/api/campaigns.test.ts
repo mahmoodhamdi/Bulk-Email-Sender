@@ -63,7 +63,7 @@ describe('Campaigns API Routes', () => {
 
       const request = new NextRequest('http://localhost:3000/api/campaigns?status=DRAFT');
       const response = await GET(request);
-      const data = await response.json();
+      await response.json();
 
       expect(response.status).toBe(200);
       expect(prisma.campaign.findMany).toHaveBeenCalledWith(

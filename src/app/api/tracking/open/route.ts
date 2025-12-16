@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
 import { trackOpenSchema } from '@/lib/validations/tracking';
 import { ZodError } from 'zod';
+import { fireEvent, WEBHOOK_EVENTS } from '@/lib/webhook';
 
 // 1x1 transparent PNG pixel
 const TRACKING_PIXEL = Buffer.from(
@@ -70,6 +71,35 @@ export async function GET(request: NextRequest) {
             openedCount: { increment: 1 },
           },
         });
+      }
+
+      // Fire webhook event (non-blocking)
+      const recipientWithContact = await prisma.recipient.findUnique({
+        where: { id: recipient.id },
+        include: {
+          contact: { select: { id: true, firstName: true, lastName: true, company: true } },
+          campaign: { select: { name: true, userId: true } },
+        },
+      });
+
+      if (recipientWithContact) {
+        fireEvent(WEBHOOK_EVENTS.EMAIL_OPENED, {
+          campaignId: recipient.campaignId,
+          campaignName: recipientWithContact.campaign.name,
+          recipientId: recipient.id,
+          contactId: recipientWithContact.contact?.id,
+          email: recipientWithContact.email,
+          firstName: recipientWithContact.contact?.firstName || undefined,
+          lastName: recipientWithContact.contact?.lastName || undefined,
+          company: recipientWithContact.contact?.company || undefined,
+          metadata: {
+            userAgent: request.headers.get('user-agent') || 'unknown',
+            openCount: recipient.openCount + 1,
+          },
+        }, {
+          userId: recipientWithContact.campaign.userId || undefined,
+          campaignId: recipient.campaignId,
+        }).catch((err) => console.error('Failed to fire webhook:', err));
       }
     }
 
