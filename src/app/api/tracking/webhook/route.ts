@@ -3,6 +3,7 @@ import { prisma } from '@/lib/db/prisma';
 import { webhookEventSchema, bounceEventSchema, complaintEventSchema } from '@/lib/validations/tracking';
 import { ZodError } from 'zod';
 import { Prisma } from '@prisma/client';
+import { fireEvent, WEBHOOK_EVENTS } from '@/lib/webhook';
 
 /**
  * POST /api/tracking/webhook
@@ -141,6 +142,42 @@ async function processWebhookEvent(event: {
         metadata: (event.metadata || {}) as Prisma.InputJsonValue,
       },
     });
+
+    // Fire outbound webhook event (non-blocking)
+    const recipientWithDetails = await prisma.recipient.findUnique({
+      where: { id: recipient.id },
+      include: {
+        contact: { select: { id: true, firstName: true, lastName: true, company: true } },
+        campaign: { select: { name: true, userId: true } },
+      },
+    });
+
+    if (recipientWithDetails) {
+      const webhookEventMap: Record<string, string> = {
+        'DELIVERED': WEBHOOK_EVENTS.EMAIL_DELIVERED,
+        'BOUNCED': WEBHOOK_EVENTS.EMAIL_BOUNCED,
+        'UNSUBSCRIBED': WEBHOOK_EVENTS.EMAIL_UNSUBSCRIBED,
+        'COMPLAINED': WEBHOOK_EVENTS.EMAIL_COMPLAINED,
+      };
+
+      const webhookEvent = webhookEventMap[event.type];
+      if (webhookEvent) {
+        fireEvent(webhookEvent as typeof WEBHOOK_EVENTS[keyof typeof WEBHOOK_EVENTS], {
+          campaignId: recipient.campaignId,
+          campaignName: recipientWithDetails.campaign.name,
+          recipientId: recipient.id,
+          contactId: recipientWithDetails.contact?.id,
+          email: recipientWithDetails.email,
+          firstName: recipientWithDetails.contact?.firstName || undefined,
+          lastName: recipientWithDetails.contact?.lastName || undefined,
+          company: recipientWithDetails.contact?.company || undefined,
+          metadata: event.metadata,
+        }, {
+          userId: recipientWithDetails.campaign.userId || undefined,
+          campaignId: recipient.campaignId,
+        }).catch((err) => console.error('Failed to fire outbound webhook:', err));
+      }
+    }
   }
 }
 

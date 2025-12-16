@@ -50,12 +50,15 @@ npm install --legacy-peer-deps
     - `campaigns/` - Campaign CRUD, send, queue-status
     - `contacts/` - Contact CRUD with bulk import
     - `templates/` - Template CRUD with duplicate
-    - `tracking/` - Open/click tracking, webhooks
+    - `tracking/` - Open/click tracking, inbound webhooks
+    - `webhooks/` - Outbound webhook CRUD, test, deliveries
     - `queue/` - Queue health and management
     - `smtp/test` - SMTP connection test
     - `email/test` - Test email sending
 - `src/lib/` - Core libraries
   - `src/lib/email/` - Email sending logic (sender, merge-tags, validator)
+  - `src/lib/queue/` - BullMQ email queue and worker
+  - `src/lib/webhook/` - Outbound webhook delivery system
   - `src/lib/db/` - Database utilities (Prisma client singleton)
   - `src/lib/crypto.ts` - Secure ID generation, AES-GCM encryption, HTML/CSV escaping, DOMPurify sanitization
   - `src/lib/rate-limit.ts` - In-memory rate limiting with pre-configured limiters
@@ -82,7 +85,7 @@ npm install --legacy-peer-deps
 Use `@/*` to import from `src/*` (e.g., `import { cn } from '@/lib/utils'`)
 
 ### Database Schema (Prisma)
-Key models: User, Account, Session, VerificationToken, ApiKey, Campaign, Template, Contact, ContactList, ContactListMember, Recipient, EmailEvent, SmtpConfig, Unsubscribe.
+Key models: User, Account, Session, VerificationToken, ApiKey, Campaign, Template, Contact, ContactList, ContactListMember, Recipient, EmailEvent, SmtpConfig, Unsubscribe, Webhook, WebhookDelivery.
 
 Enums:
 - UserRole: USER, ADMIN, SUPER_ADMIN
@@ -90,6 +93,8 @@ Enums:
 - ContactStatus: ACTIVE, UNSUBSCRIBED, BOUNCED, COMPLAINED
 - RecipientStatus: PENDING, QUEUED, SENT, DELIVERED, OPENED, CLICKED, BOUNCED, FAILED, UNSUBSCRIBED
 - EventType: SENT, DELIVERED, OPENED, CLICKED, BOUNCED, UNSUBSCRIBED, COMPLAINED
+- WebhookAuthType: NONE, BASIC, BEARER, API_KEY, HMAC
+- WebhookDeliveryStatus: PENDING, PROCESSING, DELIVERED, FAILED, RETRYING
 
 ### Email System
 - `src/lib/email/sender.ts` - SMTP integration with Nodemailer, factory pattern via `createEmailSender()`. Supports presets: gmail, outlook, yahoo, sendgrid, mailgun, ses, zoho
@@ -219,6 +224,77 @@ SMTP Provider Rate Limits (emails/minute):
 - SendGrid: 600, Mailgun: 600, SES: 200
 - Zoho: 150, Custom: 60
 
+### Webhook System
+Outbound webhook delivery system for real-time event notifications. Uses BullMQ for reliable delivery with exponential backoff retries.
+
+Files in `src/lib/webhook/`:
+- `types.ts` - Webhook types, Zod schemas, event constants
+- `signature.ts` - HMAC signature generation and verification
+- `webhook-queue.ts` - BullMQ queue for webhook jobs
+- `webhook-worker.ts` - Worker for processing webhook deliveries
+- `webhook-service.ts` - High-level service (fireEvent, CRUD operations)
+- `index.ts` - Exports all webhook functionality
+
+Database models (Prisma):
+- `Webhook` - Webhook configuration (url, events, auth settings)
+- `WebhookDelivery` - Delivery attempts and status
+
+Enums:
+- `WebhookAuthType`: NONE, BASIC, BEARER, API_KEY, HMAC
+- `WebhookDeliveryStatus`: PENDING, PROCESSING, DELIVERED, FAILED, RETRYING
+
+Webhook events:
+- Email: `email.sent`, `email.delivered`, `email.opened`, `email.clicked`, `email.bounced`, `email.unsubscribed`, `email.complained`
+- Campaign: `campaign.started`, `campaign.completed`, `campaign.paused`
+- Contact: `contact.created`, `contact.updated`
+
+Webhook API routes:
+- `GET /api/webhooks` - List webhooks with pagination
+- `POST /api/webhooks` - Create webhook
+- `GET /api/webhooks/[id]` - Get webhook with stats
+- `PATCH /api/webhooks/[id]` - Update webhook
+- `DELETE /api/webhooks/[id]` - Delete webhook
+- `POST /api/webhooks/[id]/test` - Test webhook connectivity
+- `GET /api/webhooks/[id]/deliveries` - List delivery history
+- `POST /api/webhooks/[id]/deliveries` - Retry failed delivery
+- `GET /api/webhooks/events` - List available events
+
+Usage:
+```typescript
+import { fireEvent, WEBHOOK_EVENTS } from '@/lib/webhook';
+
+// Fire webhook event (non-blocking)
+fireEvent(WEBHOOK_EVENTS.EMAIL_SENT, {
+  emailId: 'email-123',
+  recipientEmail: 'user@example.com',
+  campaignId: 'campaign-456',
+}, { userId: 'user-id', campaignId: 'campaign-456' }).catch(console.error);
+```
+
+Webhook payload format:
+```json
+{
+  "id": "evt_xxx",
+  "event": "email.sent",
+  "timestamp": "2024-01-01T00:00:00.000Z",
+  "data": { "emailId": "...", "recipientEmail": "..." }
+}
+```
+
+Authentication headers:
+- HMAC: `X-Webhook-Signature: sha256=...`, `X-Webhook-Timestamp: ...`
+- Bearer: `Authorization: Bearer <token>`
+- Basic: `Authorization: Basic <base64>`
+- API Key: Custom header with key value
+
+Retry strategy: Exponential backoff (1min → 5min → 30min), max 3 retries.
+
+Worker command:
+```bash
+npm run webhook-worker     # Start webhook worker (production)
+npm run webhook-worker:dev # Start with watch mode (development)
+```
+
 ### State Management
 Zustand stores in `src/stores/`: campaign, analytics, schedule, preview, ab-test, automation, segmentation, email-builder, reputation, unsubscribe, settings.
 
@@ -262,6 +338,15 @@ Optional OAuth providers:
 - `GOOGLE_CLIENT_SECRET` - Google OAuth client secret
 - `GITHUB_CLIENT_ID` - GitHub OAuth client ID
 - `GITHUB_CLIENT_SECRET` - GitHub OAuth client secret
+
+Firebase Admin (server-side, choose one method):
+- `FIREBASE_SERVICE_ACCOUNT` - JSON string of service account
+- Or individual values: `FIREBASE_PROJECT_ID`, `FIREBASE_CLIENT_EMAIL`, `FIREBASE_PRIVATE_KEY`
+
+Firebase Client (browser-side):
+- `NEXT_PUBLIC_FIREBASE_API_KEY`, `NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN`, `NEXT_PUBLIC_FIREBASE_PROJECT_ID`
+- `NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET`, `NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID`, `NEXT_PUBLIC_FIREBASE_APP_ID`
+- `NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID`, `NEXT_PUBLIC_FIREBASE_VAPID_KEY` (for FCM web push)
 
 Optional:
 - `NEXT_PUBLIC_CONTACT_EMAIL` - Contact email for footer

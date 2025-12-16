@@ -994,6 +994,137 @@
       "clickRate": "Click Rate"
     }
   },
+  "webhooks": {
+    "title": "Webhooks",
+    "subtitle": "Configure outbound webhooks for real-time notifications",
+    "newWebhook": "New Webhook",
+    "noWebhooks": "No webhooks configured",
+    "noWebhooksDesc": "Create a webhook to receive real-time notifications when events occur",
+    "createFirst": "Create Your First Webhook",
+    "searchPlaceholder": "Search webhooks...",
+    "name": "Name",
+    "namePlaceholder": "e.g., CRM Integration",
+    "url": "Endpoint URL",
+    "urlPlaceholder": "https://api.example.com/webhook",
+    "urlHint": "The URL that will receive webhook POST requests",
+    "events": "Events",
+    "eventsHint": "Select events that will trigger this webhook",
+    "selectEvents": "Select events...",
+    "authentication": "Authentication",
+    "authType": "Auth Type",
+    "authTypes": {
+      "none": "None",
+      "basic": "Basic Auth",
+      "bearer": "Bearer Token",
+      "apiKey": "API Key",
+      "hmac": "HMAC Signature"
+    },
+    "authHeader": "Header Name",
+    "authHeaderPlaceholder": "X-API-Key",
+    "authValue": "Auth Value",
+    "authValuePlaceholder": "Your API key or token",
+    "secret": "Signing Secret",
+    "secretPlaceholder": "Webhook signing secret",
+    "secretHint": "Used to generate HMAC signatures for payload verification",
+    "generateSecret": "Generate Secret",
+    "configuration": "Configuration",
+    "timeout": "Timeout",
+    "timeoutHint": "Request timeout in milliseconds",
+    "maxRetries": "Max Retries",
+    "maxRetriesHint": "Number of retry attempts for failed deliveries",
+    "filters": "Filters",
+    "filterByCampaign": "Filter by Campaign",
+    "filterByCampaignHint": "Only trigger for selected campaigns (leave empty for all)",
+    "isActive": "Active",
+    "testWebhook": "Test Webhook",
+    "testing": "Testing...",
+    "testSuccess": "Webhook test successful!",
+    "testFailed": "Webhook test failed",
+    "status": "Status",
+    "active": "Active",
+    "inactive": "Inactive",
+    "deliveries": "Deliveries",
+    "recentDeliveries": "Recent Deliveries",
+    "viewDeliveries": "View Deliveries",
+    "noDeliveries": "No deliveries yet",
+    "noDeliveriesDesc": "Deliveries will appear here when events are triggered",
+    "delivery": {
+      "status": {
+        "pending": "Pending",
+        "processing": "Processing",
+        "delivered": "Delivered",
+        "failed": "Failed",
+        "retrying": "Retrying"
+      },
+      "attempts": "Attempts",
+      "statusCode": "Status Code",
+      "responseTime": "Response Time",
+      "retry": "Retry",
+      "viewPayload": "View Payload",
+      "viewResponse": "View Response"
+    },
+    "stats": {
+      "totalDeliveries": "Total Deliveries",
+      "delivered": "Delivered",
+      "failed": "Failed",
+      "successRate": "Success Rate",
+      "avgResponseTime": "Avg Response Time"
+    },
+    "eventTypes": {
+      "email": {
+        "title": "Email Events",
+        "sent": "Email Sent",
+        "sentDesc": "Triggered when an email is sent",
+        "delivered": "Email Delivered",
+        "deliveredDesc": "Triggered when delivery is confirmed",
+        "opened": "Email Opened",
+        "openedDesc": "Triggered when a recipient opens an email",
+        "clicked": "Link Clicked",
+        "clickedDesc": "Triggered when a link is clicked",
+        "bounced": "Email Bounced",
+        "bouncedDesc": "Triggered when an email bounces",
+        "unsubscribed": "Unsubscribed",
+        "unsubscribedDesc": "Triggered when a recipient unsubscribes",
+        "complained": "Spam Complaint",
+        "complainedDesc": "Triggered when a spam complaint is received"
+      },
+      "campaign": {
+        "title": "Campaign Events",
+        "started": "Campaign Started",
+        "startedDesc": "Triggered when a campaign begins sending",
+        "completed": "Campaign Completed",
+        "completedDesc": "Triggered when a campaign finishes",
+        "paused": "Campaign Paused",
+        "pausedDesc": "Triggered when a campaign is paused"
+      },
+      "contact": {
+        "title": "Contact Events",
+        "created": "Contact Created",
+        "createdDesc": "Triggered when a new contact is added",
+        "updated": "Contact Updated",
+        "updatedDesc": "Triggered when contact info is updated"
+      }
+    },
+    "confirm": {
+      "delete": "Are you sure you want to delete this webhook?",
+      "deactivate": "Are you sure you want to deactivate this webhook?"
+    },
+    "messages": {
+      "created": "Webhook created successfully",
+      "updated": "Webhook updated successfully",
+      "deleted": "Webhook deleted successfully",
+      "activated": "Webhook activated",
+      "deactivated": "Webhook deactivated"
+    },
+    "errors": {
+      "nameRequired": "Name is required",
+      "urlRequired": "URL is required",
+      "urlInvalid": "Invalid URL format",
+      "eventsRequired": "At least one event is required",
+      "authValueRequired": "Auth value is required for this auth type",
+      "secretRequired": "Secret is required for HMAC authentication"
+    }
+  },
   "reputation": {
     "senderReputation": "Sender Reputation",
     "subtitle": "Monitor your email deliverability and sender health",

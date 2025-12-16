@@ -20,6 +20,7 @@ import {
   type QueueConfig,
   getSmtpRateLimit,
 } from './types';
+import { fireEvent, WEBHOOK_EVENTS } from '../webhook';
 
 let emailWorker: Worker<EmailJobData, EmailJobResult> | null = null;
 
@@ -136,6 +137,35 @@ async function processEmailJob(
         sentCount: { increment: 1 },
       },
     });
+
+    // Fire webhook event (non-blocking)
+    const campaign = await prisma.campaign.findUnique({
+      where: { id: data.campaignId },
+      select: { name: true, userId: true },
+    });
+
+    const recipient = await prisma.recipient.findUnique({
+      where: { id: data.recipientId },
+      select: { contactId: true },
+    });
+
+    fireEvent(WEBHOOK_EVENTS.EMAIL_SENT, {
+      campaignId: data.campaignId,
+      campaignName: campaign?.name,
+      recipientId: data.recipientId,
+      contactId: recipient?.contactId || undefined,
+      email: data.email,
+      firstName: data.mergeData.firstName,
+      lastName: data.mergeData.lastName,
+      company: data.mergeData.company,
+      metadata: {
+        messageId: result.messageId,
+        processingTime: Date.now() - startTime,
+      },
+    }, {
+      userId: campaign?.userId || undefined,
+      campaignId: data.campaignId,
+    }).catch((err) => console.error('Failed to fire webhook:', err));
 
     console.log(
       `[Worker] Job ${job.id} completed successfully in ${Date.now() - startTime}ms`

@@ -3,7 +3,6 @@ import { act } from '@testing-library/react';
 import {
   useScheduleStore,
   getLocalTimezone,
-  TIMEZONES,
 } from '@/stores/schedule-store';
 
 describe('Schedule Store Integration', () => {

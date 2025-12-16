@@ -130,8 +130,7 @@ test.describe('Unsubscribe Management Feature', () => {
     test('should show loading state initially', async ({ page }) => {
       await page.goto('/contacts/suppression');
 
-      // Check for spinner or loading indicator
-      const spinner = page.locator('.animate-spin');
+      // Check for spinner or loading indicator (visible briefly during load)
       // Take screenshot during loading if visible
       await page.screenshot({ path: 'screenshots/suppression-07-loading.png', fullPage: true });
 

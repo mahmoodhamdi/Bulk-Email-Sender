@@ -28,7 +28,7 @@ vi.mock('@/lib/db/prisma', () => ({
   },
 }));
 
-import { auth, isAdmin, isSuperAdmin } from '@/lib/auth';
+import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/db/prisma';
 
 describe('/api/admin/users', () => {

@@ -2,7 +2,6 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { act } from '@testing-library/react';
 import {
   useAutomationStore,
-  type AutomationStep,
   type EmailStepConfig,
   type DelayStepConfig,
   type ConditionStepConfig,
@@ -463,11 +462,11 @@ describe('Automation Store Integration', () => {
         useAutomationStore.getState().createAutomation('Cleanup Test');
       });
 
-      let step1: string, step2: string, step3: string;
+      let step1: string, step2: string;
       act(() => {
         step1 = useAutomationStore.getState().addStep('email');
         step2 = useAutomationStore.getState().addStep('delay', step1);
-        step3 = useAutomationStore.getState().addStep('email', step2);
+        useAutomationStore.getState().addStep('email', step2);
       });
 
       // Delete middle step
