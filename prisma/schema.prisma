@@ -170,6 +170,9 @@ model Campaign {
   @@index([status])
   @@index([createdAt])
   @@index([userId])
+  @@index([templateId])
+  @@index([userId, status])
+  @@index([status, scheduledAt])
 }
 
 enum CampaignStatus {
@@ -231,6 +234,7 @@ model TemplateVersion {
   @@unique([templateId, version])
   @@index([templateId])
   @@index([createdAt])
+  @@index([createdBy])
 }
 
 enum VersionChangeType {
@@ -269,6 +273,9 @@ model Contact {
   @@index([firstName])
   @@index([lastName])
   @@index([userId])
+  @@index([userId, status])
+  @@index([userId, createdAt])
+  @@index([createdAt])
 }
 
 enum ContactStatus {
@@ -307,6 +314,8 @@ model ContactListMember {
   createdAt   DateTime    @default(now())
 
   @@unique([listId, contactId])
+  @@index([listId])
+  @@index([contactId])
 }
 
 model Recipient {
@@ -340,6 +349,10 @@ model Recipient {
   @@index([email])
   @@index([status])
   @@index([trackingId])
+  @@index([contactId])
+  @@index([campaignId, status])
+  @@index([sentAt])
+  @@index([createdAt])
 }
 
 enum RecipientStatus {
@@ -370,6 +383,8 @@ model EmailEvent {
   @@index([recipientId])
   @@index([type])
   @@index([createdAt])
+  @@index([campaignId, type])
+  @@index([recipientId, type])
 }
 
 enum EventType {
@@ -495,6 +510,9 @@ model WebhookDelivery {
   @@index([status])
   @@index([event])
   @@index([createdAt])
+  @@index([webhookId, status])
+  @@index([scheduledAt])
+  @@index([nextRetryAt])
 }
 
 enum WebhookDeliveryStatus {
