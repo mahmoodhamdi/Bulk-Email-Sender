@@ -98,7 +98,7 @@ export async function GET(request: NextRequest) {
 
     // Redirect to destination URL
     return NextResponse.redirect(validated.url, { status: 302 });
-  } catch (error) {
+  } catch (error: unknown) {
     if (error instanceof ZodError) {
       // If URL validation fails, return error
       return NextResponse.json(

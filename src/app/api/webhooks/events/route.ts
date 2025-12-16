@@ -37,7 +37,7 @@ export async function GET() {
         grouped: groupedEvents,
       },
     });
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Error listing webhook events:', error);
     return NextResponse.json(
       { error: 'Internal server error' },

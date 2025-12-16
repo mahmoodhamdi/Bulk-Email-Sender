@@ -10,7 +10,7 @@ export async function GET() {
       version: process.env.npm_package_version || '1.0.0',
       environment: process.env.NODE_ENV || 'development',
     });
-  } catch (error) {
+  } catch (error: unknown) {
     return NextResponse.json(
       {
         status: 'unhealthy',

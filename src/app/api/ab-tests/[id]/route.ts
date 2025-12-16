@@ -48,7 +48,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     }
 
     return NextResponse.json({ data: abTest });
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Error getting A/B test:', error);
     return NextResponse.json(
       { error: 'Internal server error' },
@@ -142,7 +142,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
         return NextResponse.json({ data: result });
       }
     }
-  } catch (error) {
+  } catch (error: unknown) {
     if (error instanceof ZodError) {
       return NextResponse.json(
         { error: 'Validation error', details: error.errors },
@@ -213,7 +213,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       { message: 'A/B test deleted successfully' },
       { status: 200 }
     );
-  } catch (error) {
+  } catch (error: unknown) {
     if (error instanceof Error && error.message === 'A/B test not found') {
       return NextResponse.json(
         { error: 'A/B test not found' },

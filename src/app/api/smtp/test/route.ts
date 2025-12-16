@@ -40,7 +40,7 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
-  } catch (error) {
+  } catch (error: unknown) {
     return NextResponse.json(
       {
         success: false,

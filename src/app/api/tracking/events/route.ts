@@ -88,7 +88,7 @@ export async function GET(request: NextRequest) {
         totalPages: Math.ceil(total / limit),
       },
     });
-  } catch (error) {
+  } catch (error: unknown) {
     if (error instanceof ZodError) {
       return NextResponse.json(
         { error: 'Validation error', details: error.errors },

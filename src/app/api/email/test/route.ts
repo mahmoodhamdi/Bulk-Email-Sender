@@ -170,7 +170,7 @@ export async function POST(request: NextRequest) {
       totalSent,
       totalFailed,
     });
-  } catch (error) {
+  } catch (error: unknown) {
     return NextResponse.json(
       {
         success: false,

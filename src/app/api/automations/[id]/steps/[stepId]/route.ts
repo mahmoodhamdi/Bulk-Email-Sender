@@ -37,7 +37,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     const step = await updateStep(stepId, validated);
 
     return NextResponse.json({ data: step });
-  } catch (error) {
+  } catch (error: unknown) {
     if (error instanceof ZodError) {
       return NextResponse.json(
         { error: 'Validation error', details: error.errors },
@@ -96,7 +96,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       { message: 'Step removed successfully' },
       { status: 200 }
     );
-  } catch (error) {
+  } catch (error: unknown) {
     if (error instanceof Error) {
       const errorMessages: Record<string, number> = {
         'Step not found': 404,

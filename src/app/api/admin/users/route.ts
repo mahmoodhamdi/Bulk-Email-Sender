@@ -93,7 +93,7 @@ export async function GET(request: NextRequest) {
         hasMore: page < totalPages,
       },
     });
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('List users error:', error);
     return NextResponse.json(
       { error: 'Internal server error' },

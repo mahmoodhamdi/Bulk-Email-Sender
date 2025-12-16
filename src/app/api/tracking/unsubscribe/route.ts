@@ -93,7 +93,7 @@ export async function GET(request: NextRequest) {
       message: 'You have been successfully unsubscribed',
       email: unsubscribe.email,
     });
-  } catch (error) {
+  } catch (error: unknown) {
     if (error instanceof ZodError) {
       return NextResponse.json(
         { error: 'Invalid unsubscribe request' },
@@ -194,7 +194,7 @@ export async function POST(request: NextRequest) {
       message: 'You have been successfully unsubscribed',
       email: unsubscribe.email,
     });
-  } catch (error) {
+  } catch (error: unknown) {
     if (error instanceof ZodError) {
       return NextResponse.json(
         { error: 'Invalid unsubscribe request', details: error.errors },

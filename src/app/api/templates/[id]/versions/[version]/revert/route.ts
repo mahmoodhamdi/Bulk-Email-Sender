@@ -96,7 +96,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       },
       message: `Successfully reverted to version ${version}`,
     });
-  } catch (error) {
+  } catch (error: unknown) {
     if (error instanceof ZodError) {
       return NextResponse.json(
         { error: 'Validation error', details: error.errors },

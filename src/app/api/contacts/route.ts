@@ -79,7 +79,7 @@ export async function GET(request: NextRequest) {
         totalPages: Math.ceil(total / limit),
       },
     });
-  } catch (error) {
+  } catch (error: unknown) {
     if (error instanceof ZodError) {
       return NextResponse.json(
         { error: 'Validation error', details: error.errors },
@@ -148,7 +148,7 @@ export async function POST(request: NextRequest) {
     });
 
     return NextResponse.json({ data: contact }, { status: 201 });
-  } catch (error) {
+  } catch (error: unknown) {
     if (error instanceof ZodError) {
       return NextResponse.json(
         { error: 'Validation error', details: error.errors },
@@ -316,7 +316,7 @@ async function handleBulkImport(body: unknown) {
       data: results,
       message: `Import completed: ${results.created} created, ${results.updated} updated, ${results.skipped} skipped`,
     }, { status: 200 });
-  } catch (error) {
+  } catch (error: unknown) {
     if (error instanceof ZodError) {
       return NextResponse.json(
         { error: 'Validation error', details: error.errors },

@@ -105,7 +105,7 @@ export async function PATCH(request: NextRequest) {
       message: 'Profile updated successfully',
       data: updatedUser,
     });
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Profile update error:', error);
     return NextResponse.json(
       { error: 'Internal server error' },
@@ -170,7 +170,7 @@ export async function PUT(request: NextRequest) {
       success: true,
       message: 'Password changed successfully',
     });
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Password change error:', error);
     return NextResponse.json(
       { error: 'Internal server error' },

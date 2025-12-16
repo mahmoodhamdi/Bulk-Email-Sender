@@ -42,7 +42,7 @@ export async function POST(request: NextRequest) {
       errors: results.errors.length,
       details: results.errors.length > 0 ? results.errors : undefined,
     });
-  } catch (error) {
+  } catch (error: unknown) {
     if (error instanceof SyntaxError) {
       return NextResponse.json(
         { error: 'Invalid JSON body' },
@@ -276,7 +276,7 @@ export async function handleBounceWebhook(request: NextRequest) {
     );
 
     return NextResponse.json({ success: true });
-  } catch (error) {
+  } catch (error: unknown) {
     if (error instanceof ZodError) {
       return NextResponse.json(
         { error: 'Validation error', details: error.errors },
@@ -308,7 +308,7 @@ export async function handleComplaintWebhook(request: NextRequest) {
     );
 
     return NextResponse.json({ success: true });
-  } catch (error) {
+  } catch (error: unknown) {
     if (error instanceof ZodError) {
       return NextResponse.json(
         { error: 'Validation error', details: error.errors },

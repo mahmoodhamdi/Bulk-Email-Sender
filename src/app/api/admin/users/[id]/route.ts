@@ -166,7 +166,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       message: 'User updated successfully',
       data: updatedUser,
     });
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Admin update user error:', error);
     return NextResponse.json(
       { error: 'Internal server error' },
@@ -229,7 +229,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       success: true,
       message: 'User deleted successfully',
     });
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Admin delete user error:', error);
     return NextResponse.json(
       { error: 'Internal server error' },
