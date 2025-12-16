@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import crypto from 'crypto';
 
 // Security headers to add to all responses
 export const SECURITY_HEADERS: Record<string, string> = {
@@ -10,26 +11,69 @@ export const SECURITY_HEADERS: Record<string, string> = {
   'Strict-Transport-Security': 'max-age=31536000; includeSubDomains',
 };
 
-// CSP for non-API routes (more restrictive)
-export const CONTENT_SECURITY_POLICY = [
-  "default-src 'self'",
-  "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
-  "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' data: https: blob:",
-  "font-src 'self' data:",
-  "connect-src 'self' https:",
-  "frame-ancestors 'none'",
-  "base-uri 'self'",
-  "form-action 'self'",
-].join('; ');
+/**
+ * Generate a cryptographic nonce for CSP
+ */
+export function generateNonce(): string {
+  return crypto.randomBytes(16).toString('base64');
+}
+
+/**
+ * Build CSP with nonce for non-API routes (secure, no unsafe-inline/eval)
+ */
+export function buildContentSecurityPolicy(nonce: string): string {
+  return [
+    "default-src 'self'",
+    `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'`,
+    `style-src 'self' 'nonce-${nonce}'`,
+    "img-src 'self' data: https: blob:",
+    "font-src 'self' data:",
+    "connect-src 'self' https:",
+    "frame-ancestors 'none'",
+    "base-uri 'self'",
+    "form-action 'self'",
+    "upgrade-insecure-requests",
+  ].join('; ');
+}
+
+/**
+ * Build a more permissive CSP for development mode
+ * Still uses nonces but allows more flexibility for hot reload
+ */
+export function buildDevContentSecurityPolicy(nonce: string): string {
+  return [
+    "default-src 'self'",
+    // Development needs unsafe-eval for Next.js hot reload
+    `script-src 'self' 'nonce-${nonce}' 'unsafe-eval'`,
+    `style-src 'self' 'nonce-${nonce}' 'unsafe-inline'`,
+    "img-src 'self' data: https: blob:",
+    "font-src 'self' data:",
+    "connect-src 'self' https: ws: wss:",
+    "frame-ancestors 'none'",
+    "base-uri 'self'",
+    "form-action 'self'",
+  ].join('; ');
+}
+
+// Legacy export for backwards compatibility (deprecated)
+export const CONTENT_SECURITY_POLICY = buildContentSecurityPolicy('NONCE_PLACEHOLDER');
 
 /**
  * Apply security headers to a response
  * @param response - The NextResponse object
- * @param isApiRoute - Whether this is an API route (skips CSP)
+ * @param options - Configuration options
  * @returns The response with security headers applied
  */
-export function applySecurityHeaders(response: NextResponse, isApiRoute: boolean = false): NextResponse {
+export function applySecurityHeaders(
+  response: NextResponse,
+  options: {
+    isApiRoute?: boolean;
+    nonce?: string;
+  } = {}
+): NextResponse {
+  const { isApiRoute = false, nonce } = options;
+  const isDev = process.env.NODE_ENV === 'development';
+
   // Add standard security headers
   Object.entries(SECURITY_HEADERS).forEach(([key, value]) => {
     response.headers.set(key, value);
@@ -37,7 +81,18 @@ export function applySecurityHeaders(response: NextResponse, isApiRoute: boolean
 
   // Add CSP for non-API routes
   if (!isApiRoute) {
-    response.headers.set('Content-Security-Policy', CONTENT_SECURITY_POLICY);
+    // Generate nonce if not provided
+    const cspNonce = nonce || generateNonce();
+
+    // Use dev CSP in development, strict CSP in production
+    const csp = isDev
+      ? buildDevContentSecurityPolicy(cspNonce)
+      : buildContentSecurityPolicy(cspNonce);
+
+    response.headers.set('Content-Security-Policy', csp);
+
+    // Set nonce as header so it can be read by Server Components
+    response.headers.set('X-Nonce', cspNonce);
   }
 
   return response;

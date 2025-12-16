@@ -5,7 +5,7 @@ import {
   validateCsrfToken,
   getOrCreateCsrfToken,
 } from './lib/csrf';
-import { applySecurityHeaders } from './lib/security-headers';
+import { applySecurityHeaders, generateNonce } from './lib/security-headers';
 
 const intlMiddleware = createMiddleware(routing);
 
@@ -40,13 +40,16 @@ export default function middleware(request: NextRequest) {
         },
         { status: 403 }
       );
-      return applySecurityHeaders(response, true);
+      return applySecurityHeaders(response, { isApiRoute: true });
     }
 
     // API routes don't need intl middleware
     const response = NextResponse.next();
-    return applySecurityHeaders(response, true);
+    return applySecurityHeaders(response, { isApiRoute: true });
   }
+
+  // Generate nonce for CSP
+  const nonce = generateNonce();
 
   // Apply intl middleware for non-API routes
   const response = intlMiddleware(request);
@@ -57,7 +60,7 @@ export default function middleware(request: NextRequest) {
     response.headers.set('Set-Cookie', cookie);
   }
 
-  return applySecurityHeaders(response, false);
+  return applySecurityHeaders(response, { isApiRoute: false, nonce });
 }
 
 export const config = {

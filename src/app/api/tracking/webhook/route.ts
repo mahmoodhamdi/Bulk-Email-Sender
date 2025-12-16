@@ -70,11 +70,21 @@ async function processWebhookEvent(event: {
 }) {
   const now = event.timestamp ? new Date(event.timestamp) : new Date();
 
-  // Find recipient if we have the info
+  // Find recipient if we have the info (include contact/campaign for webhook)
+  const recipientSelect = {
+    id: true,
+    email: true,
+    campaignId: true,
+    status: true,
+    contact: { select: { id: true, firstName: true, lastName: true, company: true } },
+    campaign: { select: { name: true, userId: true } },
+  } as const;
+
   let recipient = null;
   if (event.recipientId) {
     recipient = await prisma.recipient.findUnique({
       where: { id: event.recipientId },
+      select: recipientSelect,
     });
   } else if (event.campaignId && event.email) {
     recipient = await prisma.recipient.findFirst({
@@ -82,6 +92,7 @@ async function processWebhookEvent(event: {
         campaignId: event.campaignId,
         email: event.email,
       },
+      select: recipientSelect,
     });
   }
 
@@ -143,40 +154,30 @@ async function processWebhookEvent(event: {
       },
     });
 
-    // Fire outbound webhook event (non-blocking)
-    const recipientWithDetails = await prisma.recipient.findUnique({
-      where: { id: recipient.id },
-      include: {
-        contact: { select: { id: true, firstName: true, lastName: true, company: true } },
-        campaign: { select: { name: true, userId: true } },
-      },
-    });
+    // Fire outbound webhook event (non-blocking) - uses data from initial query
+    const webhookEventMap: Record<string, string> = {
+      'DELIVERED': WEBHOOK_EVENTS.EMAIL_DELIVERED,
+      'BOUNCED': WEBHOOK_EVENTS.EMAIL_BOUNCED,
+      'UNSUBSCRIBED': WEBHOOK_EVENTS.EMAIL_UNSUBSCRIBED,
+      'COMPLAINED': WEBHOOK_EVENTS.EMAIL_COMPLAINED,
+    };
 
-    if (recipientWithDetails) {
-      const webhookEventMap: Record<string, string> = {
-        'DELIVERED': WEBHOOK_EVENTS.EMAIL_DELIVERED,
-        'BOUNCED': WEBHOOK_EVENTS.EMAIL_BOUNCED,
-        'UNSUBSCRIBED': WEBHOOK_EVENTS.EMAIL_UNSUBSCRIBED,
-        'COMPLAINED': WEBHOOK_EVENTS.EMAIL_COMPLAINED,
-      };
-
-      const webhookEvent = webhookEventMap[event.type];
-      if (webhookEvent) {
-        fireEvent(webhookEvent as typeof WEBHOOK_EVENTS[keyof typeof WEBHOOK_EVENTS], {
-          campaignId: recipient.campaignId,
-          campaignName: recipientWithDetails.campaign.name,
-          recipientId: recipient.id,
-          contactId: recipientWithDetails.contact?.id,
-          email: recipientWithDetails.email,
-          firstName: recipientWithDetails.contact?.firstName || undefined,
-          lastName: recipientWithDetails.contact?.lastName || undefined,
-          company: recipientWithDetails.contact?.company || undefined,
-          metadata: event.metadata,
-        }, {
-          userId: recipientWithDetails.campaign.userId || undefined,
-          campaignId: recipient.campaignId,
-        }).catch((err) => console.error('Failed to fire outbound webhook:', err));
-      }
+    const webhookEvent = webhookEventMap[event.type];
+    if (webhookEvent) {
+      fireEvent(webhookEvent as typeof WEBHOOK_EVENTS[keyof typeof WEBHOOK_EVENTS], {
+        campaignId: recipient.campaignId,
+        campaignName: recipient.campaign.name,
+        recipientId: recipient.id,
+        contactId: recipient.contact?.id,
+        email: recipient.email,
+        firstName: recipient.contact?.firstName || undefined,
+        lastName: recipient.contact?.lastName || undefined,
+        company: recipient.contact?.company || undefined,
+        metadata: event.metadata,
+      }, {
+        userId: recipient.campaign.userId || undefined,
+        campaignId: recipient.campaignId,
+      }).catch((err) => console.error('Failed to fire outbound webhook:', err));
     }
   }
 }
