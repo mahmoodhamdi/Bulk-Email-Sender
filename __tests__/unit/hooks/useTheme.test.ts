@@ -56,7 +56,7 @@ describe('useTheme', () => {
     expect(document.documentElement.classList.contains('light')).toBe(false);
   });
 
-  it('should apply system theme based on prefers-color-scheme', () => {
+  it('should apply system theme based on prefers-color-scheme (dark)', () => {
     // Mock dark mode preference
     mockMatchMedia.mockImplementation((query: string) => ({
       matches: query.includes('dark'),
@@ -74,6 +74,97 @@ describe('useTheme', () => {
 
     expect(document.documentElement.classList.contains('dark')).toBe(true);
     expect(document.documentElement.classList.contains('light')).toBe(false);
+  });
+
+  it('should apply system theme based on prefers-color-scheme (light)', () => {
+    // Mock light mode preference
+    mockMatchMedia.mockImplementation((query: string) => ({
+      matches: false, // Not dark = light
+      media: query,
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    }));
+
+    useSettingsStore.setState({ theme: 'system' });
+    renderHook(() => useTheme());
+
+    expect(document.documentElement.classList.contains('light')).toBe(true);
+    expect(document.documentElement.classList.contains('dark')).toBe(false);
+  });
+
+  it('should respond to system theme changes when in system mode', () => {
+    // Store the event listener
+    let changeHandler: ((e: MediaQueryListEvent) => void) | null = null;
+
+    mockMatchMedia.mockImplementation((query: string) => ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn((event: string, handler: (e: MediaQueryListEvent) => void) => {
+        if (event === 'change') {
+          changeHandler = handler;
+        }
+      }),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    }));
+
+    useSettingsStore.setState({ theme: 'system' });
+    renderHook(() => useTheme());
+
+    // Initially light
+    expect(document.documentElement.classList.contains('light')).toBe(true);
+
+    // Simulate system theme change to dark
+    if (changeHandler) {
+      act(() => {
+        changeHandler!({ matches: true } as MediaQueryListEvent);
+      });
+    }
+
+    expect(document.documentElement.classList.contains('dark')).toBe(true);
+    expect(document.documentElement.classList.contains('light')).toBe(false);
+  });
+
+  it('should respond to system theme changes back to light', () => {
+    let changeHandler: ((e: MediaQueryListEvent) => void) | null = null;
+
+    mockMatchMedia.mockImplementation((query: string) => ({
+      matches: true, // Start with dark
+      media: query,
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn((event: string, handler: (e: MediaQueryListEvent) => void) => {
+        if (event === 'change') {
+          changeHandler = handler;
+        }
+      }),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    }));
+
+    useSettingsStore.setState({ theme: 'system' });
+    renderHook(() => useTheme());
+
+    // Initially dark
+    expect(document.documentElement.classList.contains('dark')).toBe(true);
+
+    // Simulate system theme change to light
+    if (changeHandler) {
+      act(() => {
+        changeHandler!({ matches: false } as MediaQueryListEvent);
+      });
+    }
+
+    expect(document.documentElement.classList.contains('light')).toBe(true);
+    expect(document.documentElement.classList.contains('dark')).toBe(false);
   });
 
   it('should update when theme changes', () => {

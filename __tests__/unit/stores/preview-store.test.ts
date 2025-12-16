@@ -206,6 +206,47 @@ describe('Preview Store', () => {
       });
       expect(usePreviewStore.getState().testResults).toEqual([]);
     });
+
+    it('should not send test email when testEmails is empty', async () => {
+      const initialResults = usePreviewStore.getState().testResults;
+      await act(async () => {
+        await usePreviewStore.getState().sendTestEmail();
+      });
+      // Should not change results
+      expect(usePreviewStore.getState().testResults).toEqual(initialResults);
+      expect(usePreviewStore.getState().testSending).toBe(false);
+    });
+
+    it('should not send test email when already sending', async () => {
+      act(() => {
+        usePreviewStore.getState().addTestEmail('test@example.com');
+        usePreviewStore.setState({ testSending: true });
+      });
+
+      await act(async () => {
+        await usePreviewStore.getState().sendTestEmail();
+      });
+
+      // Should still be sending (no change)
+      expect(usePreviewStore.getState().testSending).toBe(true);
+    });
+
+    it('should send test email successfully', async () => {
+      act(() => {
+        usePreviewStore.getState().addTestEmail('test1@example.com');
+        usePreviewStore.getState().addTestEmail('test2@example.com');
+      });
+
+      await act(async () => {
+        await usePreviewStore.getState().sendTestEmail();
+      });
+
+      const state = usePreviewStore.getState();
+      expect(state.testSending).toBe(false);
+      expect(state.testResults.length).toBe(2);
+      expect(state.testResults[0].success).toBe(true);
+      expect(state.testResults[0].recipient).toBe('test1@example.com');
+    });
   });
 
   describe('Spam Analysis', () => {
@@ -402,6 +443,38 @@ describe('Spam Analysis Function', () => {
       '<p>Content</p><img src="test.jpg"><a href="#">Unsubscribe</a>'
     );
     expect(result.issues.some((i) => i.message.includes('alt text'))).toBe(true);
+  });
+
+  it('should detect long subject line', () => {
+    const longSubject = 'A'.repeat(150);
+    const result = analyzeEmailForSpam(
+      longSubject,
+      '<p>Content</p><a href="#">Unsubscribe</a>'
+    );
+    expect(result.issues.some((i) => i.message.includes('quite long'))).toBe(true);
+  });
+
+  it('should detect spam trigger words in content', () => {
+    const result = analyzeEmailForSpam(
+      'Newsletter',
+      '<p>Free offer winner urgent act now click here buy now</p><a href="#">Unsubscribe</a>'
+    );
+    expect(result.issues.some((i) => i.message.includes('spam trigger words'))).toBe(true);
+  });
+
+  it('should detect empty content', () => {
+    const result = analyzeEmailForSpam('Test Subject', '');
+    expect(result.issues.some((i) => i.message.includes('empty'))).toBe(true);
+    expect(result.score).toBeGreaterThanOrEqual(30);
+  });
+
+  it('should handle Arabic unsubscribe link', () => {
+    const result = analyzeEmailForSpam(
+      'Newsletter',
+      '<p>محتوى</p><a href="#">إلغاء الاشتراك</a>'
+    );
+    // Should not complain about missing unsubscribe
+    expect(result.issues.some((i) => i.message.includes('Missing unsubscribe'))).toBe(false);
   });
 
   it('should return poor rating for spammy email', () => {

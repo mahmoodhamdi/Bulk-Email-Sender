@@ -4,6 +4,7 @@ import {
   generateShortId,
   obfuscate,
   deobfuscate,
+  hashString,
   escapeHtml,
   escapeCSV,
   sanitizeUrl,
@@ -78,6 +79,37 @@ describe('Crypto Utilities', () => {
 
     it('should return empty string for invalid input', () => {
       expect(deobfuscate('not-valid-base64!@#')).toBe('');
+    });
+  });
+
+  describe('hashString', () => {
+    it('should hash a string', async () => {
+      const hash = await hashString('test');
+      expect(typeof hash).toBe('string');
+      expect(hash.length).toBeGreaterThan(0);
+    });
+
+    it('should produce consistent hashes for same input', async () => {
+      const hash1 = await hashString('test');
+      const hash2 = await hashString('test');
+      expect(hash1).toBe(hash2);
+    });
+
+    it('should produce different hashes for different inputs', async () => {
+      const hash1 = await hashString('test1');
+      const hash2 = await hashString('test2');
+      expect(hash1).not.toBe(hash2);
+    });
+
+    it('should handle empty string', async () => {
+      const hash = await hashString('');
+      expect(typeof hash).toBe('string');
+    });
+
+    it('should handle unicode strings', async () => {
+      const hash = await hashString('مرحبا العالم');
+      expect(typeof hash).toBe('string');
+      expect(hash.length).toBeGreaterThan(0);
     });
   });
 

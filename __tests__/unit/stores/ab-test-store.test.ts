@@ -200,6 +200,42 @@ describe('A/B Test Store', () => {
       expect(updated?.status).toBe('completed');
       expect(updated?.completedAt).not.toBeNull();
     });
+
+    it('should not select winner for non-existent variant', () => {
+      useABTestStore.getState().selectWinner('non-existent-id');
+      const { currentTest } = useABTestStore.getState();
+      expect(currentTest?.winnerId).toBeNull();
+      expect(currentTest?.status).toBe('draft');
+    });
+
+    it('should complete test and calculate winner', () => {
+      const { currentTest } = useABTestStore.getState();
+      const variantA = currentTest!.variants[0].id;
+      const variantB = currentTest!.variants[1].id;
+
+      // Update variant stats
+      useABTestStore.getState().updateVariant(variantA, {
+        sent: 100,
+        opened: 50,
+      });
+      useABTestStore.getState().updateVariant(variantB, {
+        sent: 100,
+        opened: 30,
+      });
+
+      useABTestStore.getState().completeTest();
+      const updated = useABTestStore.getState().currentTest;
+
+      expect(updated?.status).toBe('completed');
+      expect(updated?.winnerId).toBe(variantA);
+      expect(updated?.completedAt).not.toBeNull();
+    });
+
+    it('should complete test with no winner when no current test', () => {
+      useABTestStore.getState().resetCurrentTest();
+      useABTestStore.getState().completeTest();
+      // Should not throw
+    });
   });
 
   describe('Test Persistence', () => {
@@ -262,6 +298,50 @@ describe('A/B Test Store', () => {
       useABTestStore.getState().setWinnerCriteria('clickRate');
       const newWinner = useABTestStore.getState().calculateWinner();
       expect(newWinner?.id).toBe(variantA); // Higher click rate wins
+    });
+
+    it('should calculate winner based on conversion rate', () => {
+      const { currentTest } = useABTestStore.getState();
+      const variantA = currentTest!.variants[0].id;
+      const variantB = currentTest!.variants[1].id;
+
+      // Update variant stats
+      useABTestStore.getState().updateVariant(variantA, {
+        sent: 100,
+        opened: 30,
+        clicked: 10,
+        converted: 10,
+      });
+      useABTestStore.getState().updateVariant(variantB, {
+        sent: 100,
+        opened: 40,
+        clicked: 8,
+        converted: 5,
+      });
+
+      // Change criteria to conversion rate
+      useABTestStore.getState().setWinnerCriteria('conversionRate');
+      const winner = useABTestStore.getState().calculateWinner();
+      expect(winner?.id).toBe(variantA); // Higher conversion rate wins
+    });
+
+    it('should return 0 rate when sent is 0', () => {
+      // Variants have sent = 0 by default
+      const winner = useABTestStore.getState().calculateWinner();
+      // Should still return a variant (the first one)
+      expect(winner).not.toBeNull();
+    });
+
+    it('should return null when no current test', () => {
+      useABTestStore.getState().resetCurrentTest();
+      const winner = useABTestStore.getState().calculateWinner();
+      expect(winner).toBeNull();
+    });
+
+    it('should return null stats when no current test', () => {
+      useABTestStore.getState().resetCurrentTest();
+      const stats = useABTestStore.getState().getVariantStats('non-existent');
+      expect(stats).toBeNull();
     });
 
     it('should get variant stats', () => {
