@@ -101,7 +101,7 @@ export async function queueDelivery(
     data: {
       webhookId: webhook.id,
       event,
-      payload: payload as Prisma.JsonObject,
+      payload: payload as unknown as Prisma.JsonObject,
       status: 'PENDING',
       attempts: 0,
     },
@@ -111,7 +111,7 @@ export async function queueDelivery(
   let authValue = webhook.authValue;
   if (authValue && ['BASIC', 'BEARER', 'API_KEY'].includes(webhook.authType)) {
     try {
-      authValue = decryptString(authValue);
+      authValue = await decryptString(authValue);
     } catch {
       // If decryption fails, use as-is (might not be encrypted)
     }
@@ -172,7 +172,7 @@ export async function retryDelivery(deliveryId: string): Promise<WebhookDelivery
   let authValue = delivery.webhook.authValue;
   if (authValue && ['BASIC', 'BEARER', 'API_KEY'].includes(delivery.webhook.authType)) {
     try {
-      authValue = decryptString(authValue);
+      authValue = await decryptString(authValue);
     } catch {
       // Use as-is
     }
@@ -183,7 +183,7 @@ export async function retryDelivery(deliveryId: string): Promise<WebhookDelivery
     webhookId: delivery.webhook.id,
     deliveryId: delivery.id,
     url: delivery.webhook.url,
-    payload: delivery.payload as WebhookPayload,
+    payload: delivery.payload as unknown as WebhookPayload,
     authType: delivery.webhook.authType,
     authHeader: delivery.webhook.authHeader || undefined,
     authValue: authValue || undefined,
@@ -246,7 +246,7 @@ export async function testWebhook(
   let authValue = webhook.authValue;
   if (authValue && ['BASIC', 'BEARER', 'API_KEY'].includes(webhook.authType)) {
     try {
-      authValue = decryptString(authValue);
+      authValue = await decryptString(authValue);
     } catch {
       // Use as-is
     }
@@ -417,7 +417,7 @@ export async function createWebhook(data: {
   // Encrypt auth value if provided
   let encryptedAuthValue = data.authValue;
   if (encryptedAuthValue && ['BASIC', 'BEARER', 'API_KEY'].includes(data.authType || 'NONE')) {
-    encryptedAuthValue = encryptString(encryptedAuthValue);
+    encryptedAuthValue = await encryptString(encryptedAuthValue);
   }
 
   return prisma.webhook.create({
@@ -465,7 +465,7 @@ export async function updateWebhook(
     const webhook = await prisma.webhook.findUnique({ where: { id } });
     const authType = data.authType || webhook?.authType || 'NONE';
     if (['BASIC', 'BEARER', 'API_KEY'].includes(authType)) {
-      encryptedAuthValue = encryptString(encryptedAuthValue);
+      encryptedAuthValue = await encryptString(encryptedAuthValue);
     }
   }
 

@@ -5,6 +5,9 @@ import {
   CONTENT_SECURITY_POLICY,
   applySecurityHeaders,
   getSecureApiHeaders,
+  generateNonce,
+  buildContentSecurityPolicy,
+  buildDevContentSecurityPolicy,
 } from '@/lib/security-headers';
 
 describe('Security Headers', () => {
@@ -57,6 +60,59 @@ describe('Security Headers', () => {
     });
   });
 
+  describe('generateNonce', () => {
+    it('should generate a base64 encoded nonce', () => {
+      const nonce = generateNonce();
+      expect(nonce).toBeTruthy();
+      expect(typeof nonce).toBe('string');
+      // Base64 encoded 16 bytes should be ~24 characters
+      expect(nonce.length).toBeGreaterThan(20);
+    });
+
+    it('should generate unique nonces', () => {
+      const nonce1 = generateNonce();
+      const nonce2 = generateNonce();
+      expect(nonce1).not.toBe(nonce2);
+    });
+  });
+
+  describe('buildContentSecurityPolicy', () => {
+    it('should include nonce in script-src', () => {
+      const nonce = 'test-nonce-123';
+      const csp = buildContentSecurityPolicy(nonce);
+      expect(csp).toContain(`'nonce-${nonce}'`);
+      expect(csp).toContain("'strict-dynamic'");
+    });
+
+    it('should include nonce in style-src', () => {
+      const nonce = 'test-nonce-123';
+      const csp = buildContentSecurityPolicy(nonce);
+      expect(csp).toContain("style-src 'self' 'nonce-test-nonce-123'");
+    });
+
+    it('should NOT include unsafe-inline or unsafe-eval', () => {
+      const nonce = 'test-nonce-123';
+      const csp = buildContentSecurityPolicy(nonce);
+      expect(csp).not.toContain('unsafe-inline');
+      expect(csp).not.toContain('unsafe-eval');
+    });
+  });
+
+  describe('buildDevContentSecurityPolicy', () => {
+    it('should include unsafe-eval for development hot reload', () => {
+      const nonce = 'test-nonce-123';
+      const csp = buildDevContentSecurityPolicy(nonce);
+      expect(csp).toContain("'unsafe-eval'");
+    });
+
+    it('should include ws: and wss: for WebSocket connections', () => {
+      const nonce = 'test-nonce-123';
+      const csp = buildDevContentSecurityPolicy(nonce);
+      expect(csp).toContain('ws:');
+      expect(csp).toContain('wss:');
+    });
+  });
+
   describe('applySecurityHeaders', () => {
     it('should apply all security headers to response', () => {
       const response = NextResponse.json({ data: 'test' });
@@ -69,16 +125,33 @@ describe('Security Headers', () => {
 
     it('should add CSP for non-API routes', () => {
       const response = NextResponse.json({ data: 'test' });
-      const securedResponse = applySecurityHeaders(response, false);
+      const securedResponse = applySecurityHeaders(response, { isApiRoute: false });
 
       expect(securedResponse.headers.get('Content-Security-Policy')).toBeTruthy();
     });
 
     it('should NOT add CSP for API routes', () => {
       const response = NextResponse.json({ data: 'test' });
-      const securedResponse = applySecurityHeaders(response, true);
+      const securedResponse = applySecurityHeaders(response, { isApiRoute: true });
 
       expect(securedResponse.headers.get('Content-Security-Policy')).toBeNull();
+    });
+
+    it('should use provided nonce in CSP', () => {
+      const response = NextResponse.json({ data: 'test' });
+      const nonce = 'custom-nonce-abc';
+      const securedResponse = applySecurityHeaders(response, { isApiRoute: false, nonce });
+
+      const csp = securedResponse.headers.get('Content-Security-Policy');
+      expect(csp).toContain(`'nonce-${nonce}'`);
+    });
+
+    it('should set X-Nonce header for non-API routes', () => {
+      const response = NextResponse.json({ data: 'test' });
+      const nonce = 'custom-nonce-abc';
+      const securedResponse = applySecurityHeaders(response, { isApiRoute: false, nonce });
+
+      expect(securedResponse.headers.get('X-Nonce')).toBe(nonce);
     });
 
     it('should return the same response object', () => {

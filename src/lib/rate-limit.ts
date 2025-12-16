@@ -8,8 +8,28 @@ interface RateLimitRecord {
   resetAt: number;
 }
 
+// Maximum number of unique identifiers to track (prevents memory leak)
+const MAX_STORE_SIZE = 10000;
+
 // In-memory store - in production use Redis
 const store = new Map<string, RateLimitRecord>();
+
+/**
+ * Evict oldest entries when store exceeds max size
+ * This prevents unbounded memory growth from unique IPs
+ */
+function evictOldestEntries(): void {
+  if (store.size <= MAX_STORE_SIZE) return;
+
+  const entriesToRemove = store.size - MAX_STORE_SIZE + 1000; // Remove extra 1000 for buffer
+  const entries = Array.from(store.entries());
+
+  // Sort by resetAt (oldest first) and remove oldest entries
+  entries
+    .sort((a, b) => a[1].resetAt - b[1].resetAt)
+    .slice(0, entriesToRemove)
+    .forEach(([key]) => store.delete(key));
+}
 
 // Cleanup old entries periodically
 if (typeof setInterval !== 'undefined') {
@@ -20,6 +40,8 @@ if (typeof setInterval !== 'undefined') {
         store.delete(key);
       }
     }
+    // Also check and evict if store is too large
+    evictOldestEntries();
   }, 60000); // Cleanup every minute
 }
 
@@ -58,6 +80,10 @@ export function checkRateLimit(
   if (!record || record.resetAt < now) {
     const resetAt = now + config.windowMs;
     store.set(identifier, { count: 1, resetAt });
+    // Prevent memory leak by evicting old entries when store grows too large
+    if (store.size > MAX_STORE_SIZE) {
+      evictOldestEntries();
+    }
     return {
       success: true,
       remaining: config.limit - 1,

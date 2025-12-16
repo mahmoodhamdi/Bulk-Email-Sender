@@ -182,15 +182,17 @@ export async function getCampaignQueueStatus(
   // Get current queue jobs for this campaign
   const jobs = await getCampaignJobs(campaignId);
 
-  const waitingJobs = jobs.filter(
-    (j) => j.getState().then((s) => s === 'waiting')
+  // Properly await all job states before filtering
+  const jobStates = await Promise.all(
+    jobs.map(async (job) => ({
+      job,
+      state: await job.getState(),
+    }))
   );
-  const activeJobs = jobs.filter(
-    (j) => j.getState().then((s) => s === 'active')
-  );
-  const failedJobs = jobs.filter(
-    (j) => j.getState().then((s) => s === 'failed')
-  );
+
+  const waitingJobs = jobStates.filter((j) => j.state === 'waiting');
+  const activeJobs = jobStates.filter((j) => j.state === 'active');
+  const failedJobs = jobStates.filter((j) => j.state === 'failed');
 
   // Calculate queue stats
   const queued = waitingJobs.length + activeJobs.length;

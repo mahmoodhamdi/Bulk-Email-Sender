@@ -23,15 +23,18 @@ export async function GET(request: NextRequest) {
     // Validate tracking ID
     trackOpenSchema.parse({ trackingId });
 
-    // Find recipient by tracking ID
+    // Find recipient by tracking ID with contact and campaign for webhook
     const recipient = await prisma.recipient.findUnique({
       where: { trackingId },
       select: {
         id: true,
+        email: true,
         campaignId: true,
         openCount: true,
         openedAt: true,
         status: true,
+        contact: { select: { id: true, firstName: true, lastName: true, company: true } },
+        campaign: { select: { name: true, userId: true } },
       },
     });
 
@@ -73,34 +76,24 @@ export async function GET(request: NextRequest) {
         });
       }
 
-      // Fire webhook event (non-blocking)
-      const recipientWithContact = await prisma.recipient.findUnique({
-        where: { id: recipient.id },
-        include: {
-          contact: { select: { id: true, firstName: true, lastName: true, company: true } },
-          campaign: { select: { name: true, userId: true } },
+      // Fire webhook event (non-blocking) - uses data from initial query
+      fireEvent(WEBHOOK_EVENTS.EMAIL_OPENED, {
+        campaignId: recipient.campaignId,
+        campaignName: recipient.campaign.name,
+        recipientId: recipient.id,
+        contactId: recipient.contact?.id,
+        email: recipient.email,
+        firstName: recipient.contact?.firstName || undefined,
+        lastName: recipient.contact?.lastName || undefined,
+        company: recipient.contact?.company || undefined,
+        metadata: {
+          userAgent: request.headers.get('user-agent') || 'unknown',
+          openCount: recipient.openCount + 1,
         },
-      });
-
-      if (recipientWithContact) {
-        fireEvent(WEBHOOK_EVENTS.EMAIL_OPENED, {
-          campaignId: recipient.campaignId,
-          campaignName: recipientWithContact.campaign.name,
-          recipientId: recipient.id,
-          contactId: recipientWithContact.contact?.id,
-          email: recipientWithContact.email,
-          firstName: recipientWithContact.contact?.firstName || undefined,
-          lastName: recipientWithContact.contact?.lastName || undefined,
-          company: recipientWithContact.contact?.company || undefined,
-          metadata: {
-            userAgent: request.headers.get('user-agent') || 'unknown',
-            openCount: recipient.openCount + 1,
-          },
-        }, {
-          userId: recipientWithContact.campaign.userId || undefined,
-          campaignId: recipient.campaignId,
-        }).catch((err) => console.error('Failed to fire webhook:', err));
-      }
+      }, {
+        userId: recipient.campaign.userId || undefined,
+        campaignId: recipient.campaignId,
+      }).catch((err) => console.error('Failed to fire webhook:', err));
     }
 
     // Return tracking pixel

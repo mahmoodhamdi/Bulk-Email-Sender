@@ -85,7 +85,7 @@ npm install --legacy-peer-deps
 Use `@/*` to import from `src/*` (e.g., `import { cn } from '@/lib/utils'`)
 
 ### Database Schema (Prisma)
-Key models: User, Account, Session, VerificationToken, ApiKey, Campaign, Template, TemplateVersion, Contact, ContactList, ContactListMember, Recipient, EmailEvent, SmtpConfig, Unsubscribe, Webhook, WebhookDelivery.
+Key models: User, Account, Session, VerificationToken, ApiKey, FcmToken, Campaign, Template, TemplateVersion, Contact, ContactList, ContactListMember, Recipient, EmailEvent, SmtpConfig, Unsubscribe, Webhook, WebhookDelivery.
 
 Enums:
 - UserRole: USER, ADMIN, SUPER_ADMIN
@@ -105,7 +105,8 @@ Enums:
 ### Middleware
 `src/middleware.ts` handles:
 - CSRF protection for API routes (validates token from `X-CSRF-Token` header)
-- Public API routes exempt from CSRF: `/api/health`, `/api/track`, `/api/unsubscribe`, `/api/auth`
+- Public API routes exempt from CSRF: `/api/health`, `/api/tracking/*`, `/api/auth`
+- Security headers via `applySecurityHeaders()`
 - Internationalization routing via next-intl
 
 ### Authentication System
@@ -290,11 +291,7 @@ Authentication headers:
 
 Retry strategy: Exponential backoff (1min → 5min → 30min), max 3 retries.
 
-Worker command:
-```bash
-npm run webhook-worker     # Start webhook worker (production)
-npm run webhook-worker:dev # Start with watch mode (development)
-```
+Note: The webhook worker is started programmatically via `startWebhookWorker()` from `@/lib/webhook`. There is no standalone webhook worker script.
 
 ### Template Versioning
 Automatic version history for email templates with revert and compare functionality.
@@ -349,6 +346,10 @@ Pre-configured limiters in `src/lib/rate-limit.ts`:
 - `sanitizeHtml()` - DOMPurify-based HTML sanitization for email content
 - `escapeHtml()` / `escapeCSV()` - XSS and CSV injection prevention
 - `sanitizeUrl()` - Block javascript:/data:/vbscript: URLs
+
+`src/lib/security-headers.ts` provides:
+- `applySecurityHeaders()` - Applies X-Frame-Options, CSP, HSTS, etc.
+- Used automatically by middleware for all responses
 
 ## Testing Strategy
 

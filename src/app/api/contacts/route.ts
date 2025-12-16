@@ -170,7 +170,7 @@ export async function POST(request: NextRequest) {
 }
 
 /**
- * Handle bulk import of contacts
+ * Handle bulk import of contacts with optimized batch operations
  */
 async function handleBulkImport(body: unknown) {
   try {
@@ -184,52 +184,131 @@ async function handleBulkImport(body: unknown) {
       errors: [] as { email: string; error: string }[],
     };
 
-    // Process contacts in batches
+    // Extract all unique emails from import data
+    const importEmails = [...new Set(contacts.map(c => c.email.toLowerCase()))];
+
+    // Single query to find all existing contacts by email
+    const existingContacts = await prisma.contact.findMany({
+      where: { email: { in: importEmails, mode: 'insensitive' } },
+      select: { id: true, email: true, firstName: true, lastName: true, company: true, customField1: true, customField2: true },
+    });
+
+    // Build map of existing emails -> contact data for O(1) lookup
+    const existingMap = new Map(
+      existingContacts.map(c => [c.email.toLowerCase(), c])
+    );
+
+    // Separate contacts into new vs existing
+    const contactsToCreate: typeof contacts = [];
+    const contactsToUpdate: { id: string; data: typeof contacts[0]; existing: typeof existingContacts[0] }[] = [];
+
     for (const contactData of contacts) {
+      const emailLower = contactData.email.toLowerCase();
+      const existing = existingMap.get(emailLower);
+
+      if (existing) {
+        if (updateExisting) {
+          contactsToUpdate.push({ id: existing.id, data: contactData, existing });
+        } else {
+          results.skipped++;
+        }
+      } else {
+        contactsToCreate.push(contactData);
+      }
+    }
+
+    // Batch create new contacts using createMany (much faster than individual creates)
+    if (contactsToCreate.length > 0) {
+      const createData = contactsToCreate.map(contactData => ({
+        email: contactData.email,
+        firstName: contactData.firstName,
+        lastName: contactData.lastName,
+        company: contactData.company,
+        customField1: contactData.customField1,
+        customField2: contactData.customField2,
+        tags: [...new Set([...contactData.tags, ...(defaultTags || [])])],
+      }));
+
       try {
-        // Merge default tags with contact tags
-        const tags = [...new Set([...contactData.tags, ...(defaultTags || [])])];
-
-        const existing = await prisma.contact.findFirst({
-          where: { email: contactData.email },
+        const createResult = await prisma.contact.createMany({
+          data: createData,
+          skipDuplicates: true,
         });
-
-        if (existing) {
-          if (updateExisting) {
-            await prisma.contact.update({
-              where: { id: existing.id },
+        results.created = createResult.count;
+      } catch (err) {
+        // If batch create fails, fall back to individual creates to track errors
+        for (const contactData of contactsToCreate) {
+          try {
+            await prisma.contact.create({
               data: {
-                firstName: contactData.firstName ?? existing.firstName,
-                lastName: contactData.lastName ?? existing.lastName,
-                company: contactData.company ?? existing.company,
-                customField1: contactData.customField1 ?? existing.customField1,
-                customField2: contactData.customField2 ?? existing.customField2,
-                tags,
+                email: contactData.email,
+                firstName: contactData.firstName,
+                lastName: contactData.lastName,
+                company: contactData.company,
+                customField1: contactData.customField1,
+                customField2: contactData.customField2,
+                tags: [...new Set([...contactData.tags, ...(defaultTags || [])])],
               },
             });
-            results.updated++;
-          } else {
-            results.skipped++;
-          }
-        } else {
-          await prisma.contact.create({
-            data: {
+            results.created++;
+          } catch (createErr) {
+            results.errors.push({
               email: contactData.email,
-              firstName: contactData.firstName,
-              lastName: contactData.lastName,
-              company: contactData.company,
-              customField1: contactData.customField1,
-              customField2: contactData.customField2,
-              tags,
-            },
-          });
-          results.created++;
+              error: createErr instanceof Error ? createErr.message : 'Unknown error',
+            });
+          }
         }
-      } catch (err) {
-        results.errors.push({
-          email: contactData.email,
-          error: err instanceof Error ? err.message : 'Unknown error',
-        });
+      }
+    }
+
+    // Batch update existing contacts using transaction
+    if (contactsToUpdate.length > 0) {
+      const BATCH_SIZE = 100;
+      for (let i = 0; i < contactsToUpdate.length; i += BATCH_SIZE) {
+        const batch = contactsToUpdate.slice(i, i + BATCH_SIZE);
+        try {
+          await prisma.$transaction(
+            batch.map(({ id, data, existing }) => {
+              const tags = [...new Set([...data.tags, ...(defaultTags || [])])];
+              return prisma.contact.update({
+                where: { id },
+                data: {
+                  firstName: data.firstName ?? existing.firstName,
+                  lastName: data.lastName ?? existing.lastName,
+                  company: data.company ?? existing.company,
+                  customField1: data.customField1 ?? existing.customField1,
+                  customField2: data.customField2 ?? existing.customField2,
+                  tags,
+                },
+              });
+            })
+          );
+          results.updated += batch.length;
+        } catch (err) {
+          // If batch fails, try individual updates
+          for (const { id, data, existing } of batch) {
+            try {
+              const tags = [...new Set([...data.tags, ...(defaultTags || [])])];
+              await prisma.contact.update({
+                where: { id },
+                data: {
+                  firstName: data.firstName ?? existing.firstName,
+                  lastName: data.lastName ?? existing.lastName,
+                  company: data.company ?? existing.company,
+                  customField1: data.customField1 ?? existing.customField1,
+                  customField2: data.customField2 ?? existing.customField2,
+                  tags,
+                },
+              });
+              results.updated++;
+            } catch (updateErr) {
+              results.errors.push({
+                email: data.email,
+                error: updateErr instanceof Error ? updateErr.message : 'Unknown error',
+              });
+            }
+          }
+        }
       }
     }
 

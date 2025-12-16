@@ -310,7 +310,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       );
     }
 
-    // Create duplicate
+    // Create duplicate (currentVersion is auto-managed by Prisma default)
     const template = await prisma.template.create({
       data: {
         name: validated.name,
@@ -319,7 +319,6 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         thumbnail: original.thumbnail,
         category: original.category,
         isDefault: false, // Duplicates are never default
-        currentVersion: 1,
       },
     });
 
