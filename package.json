@@ -56,7 +56,7 @@
     "firebase-admin": "^13.6.0",
     "ioredis": "^5.6.0",
     "lucide-react": "^0.500.0",
-    "next": "16.0.8",
+    "next": "^16.0.10",
     "next-auth": "^5.0.0-beta.30",
     "next-intl": "^4.1.0",
     "nodemailer": "^7.0.0",
