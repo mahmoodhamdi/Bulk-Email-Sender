@@ -11,6 +11,7 @@ vi.mock('@/lib/db/prisma', () => ({
     recipient: {
       updateMany: vi.fn(),
       findMany: vi.fn(),
+      count: vi.fn(),
     },
   },
 }));
@@ -60,6 +61,7 @@ describe('Queue Service', () => {
 
   const mockCampaign = {
     id: 'campaign-1',
+    name: 'Test Campaign',
     status: 'DRAFT',
     subject: 'Test Subject',
     content: '<p>Hello {{firstName}}</p>',
@@ -70,26 +72,32 @@ describe('Queue Service', () => {
     sentCount: 50,
     bouncedCount: 5,
     startedAt: new Date(Date.now() - 60000),
-    recipients: [
-      {
-        id: 'recipient-1',
-        email: 'test1@example.com',
-        trackingId: 'track-1',
-        contact: { id: 'contact-1', firstName: 'John', lastName: 'Doe', company: 'Acme', customField1: '', customField2: '' },
-      },
-      {
-        id: 'recipient-2',
-        email: 'test2@example.com',
-        trackingId: 'track-2',
-        contact: { id: 'contact-2', firstName: 'Jane', lastName: 'Doe', company: '', customField1: '', customField2: '' },
-      },
-    ],
   };
+
+  const mockRecipients = [
+    {
+      id: 'recipient-1',
+      email: 'test1@example.com',
+      trackingId: 'track-1',
+      contact: { id: 'contact-1', firstName: 'John', lastName: 'Doe', company: 'Acme', customField1: '', customField2: '' },
+    },
+    {
+      id: 'recipient-2',
+      email: 'test2@example.com',
+      trackingId: 'track-2',
+      contact: { id: 'contact-2', firstName: 'Jane', lastName: 'Doe', company: '', customField1: '', customField2: '' },
+    },
+  ];
 
   describe('queueCampaign', () => {
     it('should queue a campaign successfully', async () => {
       vi.mocked(prisma.campaign.findUnique).mockResolvedValue(mockCampaign as never);
+      vi.mocked(prisma.recipient.count).mockResolvedValue(2);
       vi.mocked(prisma.campaign.update).mockResolvedValue(mockCampaign as never);
+      // First call returns recipients, second call returns empty array (end of cursor)
+      vi.mocked(prisma.recipient.findMany)
+        .mockResolvedValueOnce(mockRecipients as never)
+        .mockResolvedValueOnce([] as never);
 
       const result = await queueCampaign('campaign-1');
 
@@ -120,10 +128,8 @@ describe('Queue Service', () => {
     });
 
     it('should return error when no recipients', async () => {
-      vi.mocked(prisma.campaign.findUnique).mockResolvedValue({
-        ...mockCampaign,
-        recipients: [],
-      } as never);
+      vi.mocked(prisma.campaign.findUnique).mockResolvedValue(mockCampaign as never);
+      vi.mocked(prisma.recipient.count).mockResolvedValue(0);
 
       const result = await queueCampaign('campaign-1');
 
@@ -133,7 +139,9 @@ describe('Queue Service', () => {
 
     it('should handle errors and revert campaign status', async () => {
       vi.mocked(prisma.campaign.findUnique).mockResolvedValue(mockCampaign as never);
+      vi.mocked(prisma.recipient.count).mockResolvedValue(2);
       vi.mocked(prisma.campaign.update).mockResolvedValueOnce(mockCampaign as never);
+      vi.mocked(prisma.recipient.findMany).mockResolvedValueOnce(mockRecipients as never);
       vi.mocked(addEmailJobs).mockRejectedValueOnce(new Error('Queue error'));
 
       const result = await queueCampaign('campaign-1');
@@ -148,7 +156,11 @@ describe('Queue Service', () => {
 
     it('should support custom SMTP config ID', async () => {
       vi.mocked(prisma.campaign.findUnique).mockResolvedValue(mockCampaign as never);
+      vi.mocked(prisma.recipient.count).mockResolvedValue(2);
       vi.mocked(prisma.campaign.update).mockResolvedValue(mockCampaign as never);
+      vi.mocked(prisma.recipient.findMany)
+        .mockResolvedValueOnce(mockRecipients as never)
+        .mockResolvedValueOnce([] as never);
 
       await queueCampaign('campaign-1', { smtpConfigId: 'smtp-custom' });
 
@@ -156,11 +168,12 @@ describe('Queue Service', () => {
     });
 
     it('should handle recipients without contacts', async () => {
-      vi.mocked(prisma.campaign.findUnique).mockResolvedValue({
-        ...mockCampaign,
-        recipients: [{ id: 'r1', email: 'test@test.com', trackingId: 't1', contact: null }],
-      } as never);
+      vi.mocked(prisma.campaign.findUnique).mockResolvedValue(mockCampaign as never);
+      vi.mocked(prisma.recipient.count).mockResolvedValue(1);
       vi.mocked(prisma.campaign.update).mockResolvedValue(mockCampaign as never);
+      vi.mocked(prisma.recipient.findMany)
+        .mockResolvedValueOnce([{ id: 'r1', email: 'test@test.com', trackingId: 't1', contact: null }] as never)
+        .mockResolvedValueOnce([] as never);
 
       const result = await queueCampaign('campaign-1');
 
@@ -384,17 +397,21 @@ describe('Queue Service', () => {
 
   describe('retryFailedRecipients', () => {
     it('should retry failed recipients successfully', async () => {
-      const failedRecipients = [
+      const pendingRecipients = [
         {
           id: 'recipient-1',
           email: 'test@example.com',
           trackingId: 'track-1',
           contact: { firstName: 'John', lastName: 'Doe', company: 'Acme', customField1: '', customField2: '' },
-          campaign: mockCampaign,
         },
       ];
-      vi.mocked(prisma.recipient.findMany).mockResolvedValue(failedRecipients as never);
+      vi.mocked(prisma.campaign.findUnique).mockResolvedValue(mockCampaign as never);
+      vi.mocked(prisma.recipient.count).mockResolvedValue(1);
       vi.mocked(prisma.recipient.updateMany).mockResolvedValue({ count: 1 } as never);
+      // First call returns the now-PENDING recipients, second call returns empty (end of cursor)
+      vi.mocked(prisma.recipient.findMany)
+        .mockResolvedValueOnce(pendingRecipients as never)
+        .mockResolvedValueOnce([] as never);
       vi.mocked(addEmailJobs).mockResolvedValue(['job-1']);
 
       const result = await retryFailedRecipients('campaign-1');
@@ -405,7 +422,8 @@ describe('Queue Service', () => {
     });
 
     it('should return zero count when no failed recipients', async () => {
-      vi.mocked(prisma.recipient.findMany).mockResolvedValue([]);
+      vi.mocked(prisma.campaign.findUnique).mockResolvedValue(mockCampaign as never);
+      vi.mocked(prisma.recipient.count).mockResolvedValue(0);
 
       const result = await retryFailedRecipients('campaign-1');
 
@@ -414,17 +432,20 @@ describe('Queue Service', () => {
     });
 
     it('should update campaign status from COMPLETED to SENDING', async () => {
-      const failedRecipients = [
+      const pendingRecipients = [
         {
           id: 'recipient-1',
           email: 'test@example.com',
           trackingId: 'track-1',
           contact: null,
-          campaign: { ...mockCampaign, status: 'COMPLETED' },
         },
       ];
-      vi.mocked(prisma.recipient.findMany).mockResolvedValue(failedRecipients as never);
+      vi.mocked(prisma.campaign.findUnique).mockResolvedValue({ ...mockCampaign, status: 'COMPLETED' } as never);
+      vi.mocked(prisma.recipient.count).mockResolvedValue(1);
       vi.mocked(prisma.recipient.updateMany).mockResolvedValue({ count: 1 } as never);
+      vi.mocked(prisma.recipient.findMany)
+        .mockResolvedValueOnce(pendingRecipients as never)
+        .mockResolvedValueOnce([] as never);
       vi.mocked(prisma.campaign.update).mockResolvedValue({} as never);
 
       await retryFailedRecipients('campaign-1');
@@ -436,7 +457,16 @@ describe('Queue Service', () => {
     });
 
     it('should return failure on error', async () => {
-      vi.mocked(prisma.recipient.findMany).mockRejectedValue(new Error('DB error'));
+      vi.mocked(prisma.campaign.findUnique).mockRejectedValue(new Error('DB error'));
+
+      const result = await retryFailedRecipients('campaign-1');
+
+      expect(result.success).toBe(false);
+      expect(result.retriedCount).toBe(0);
+    });
+
+    it('should return failure when campaign not found', async () => {
+      vi.mocked(prisma.campaign.findUnique).mockResolvedValue(null);
 
       const result = await retryFailedRecipients('campaign-1');
 

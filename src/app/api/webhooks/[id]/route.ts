@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { ZodError } from 'zod';
 import { apiRateLimiter } from '@/lib/rate-limit';
+import { validateWebhookUrl } from '@/lib/ssrf-protection';
 import {
   getWebhook,
   updateWebhook,
@@ -95,6 +96,20 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     // Parse and validate body
     const body = await request.json();
     const validated = updateWebhookSchema.parse(body);
+
+    // SSRF Protection: Validate the webhook URL if it's being updated
+    if (validated.url) {
+      const ssrfValidation = await validateWebhookUrl(validated.url);
+      if (!ssrfValidation.safe) {
+        return NextResponse.json(
+          {
+            error: 'Invalid webhook URL',
+            details: ssrfValidation.reason || 'URL blocked for security reasons',
+          },
+          { status: 400 }
+        );
+      }
+    }
 
     // Update webhook
     const webhook = await updateWebhook(id, validated);

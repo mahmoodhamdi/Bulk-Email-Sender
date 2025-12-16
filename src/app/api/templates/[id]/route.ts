@@ -3,6 +3,7 @@ import { prisma } from '@/lib/db/prisma';
 import { updateTemplateSchema, templateIdSchema, duplicateTemplateSchema } from '@/lib/validations/template';
 import { apiRateLimiter } from '@/lib/rate-limit';
 import { createVersion, createInitialVersion } from '@/lib/template';
+import { sanitizeEmailHtml } from '@/lib/sanitize-server';
 import { ZodError } from 'zod';
 
 interface RouteParams {
@@ -140,11 +141,14 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       });
     }
 
-    // Build update data
+    // Build update data with sanitized content
     const updateData: Record<string, unknown> = {};
     if (validated.name !== undefined) updateData.name = validated.name;
     if (validated.subject !== undefined) updateData.subject = validated.subject;
-    if (validated.content !== undefined) updateData.content = validated.content;
+    if (validated.content !== undefined) {
+      // Sanitize HTML content to prevent XSS attacks (preserves merge tags)
+      updateData.content = sanitizeEmailHtml(validated.content);
+    }
     if (validated.thumbnail !== undefined) updateData.thumbnail = validated.thumbnail;
     if (validated.category !== undefined) updateData.category = validated.category;
     if (validated.isDefault !== undefined) updateData.isDefault = validated.isDefault;

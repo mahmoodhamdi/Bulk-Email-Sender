@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
 import { updateCampaignSchema, campaignIdSchema } from '@/lib/validations/campaign';
 import { apiRateLimiter } from '@/lib/rate-limit';
+import { sanitizeEmailHtml } from '@/lib/sanitize-server';
 import { ZodError } from 'zod';
 
 interface RouteParams {
@@ -123,14 +124,17 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     const body = await request.json();
     const validated = updateCampaignSchema.parse(body);
 
-    // Build update data
+    // Build update data with sanitized content
     const updateData: Record<string, unknown> = {};
     if (validated.name !== undefined) updateData.name = validated.name;
     if (validated.subject !== undefined) updateData.subject = validated.subject;
     if (validated.fromName !== undefined) updateData.fromName = validated.fromName;
     if (validated.fromEmail !== undefined) updateData.fromEmail = validated.fromEmail;
     if (validated.replyTo !== undefined) updateData.replyTo = validated.replyTo;
-    if (validated.content !== undefined) updateData.content = validated.content;
+    if (validated.content !== undefined) {
+      // Sanitize HTML content to prevent XSS attacks (preserves merge tags)
+      updateData.content = sanitizeEmailHtml(validated.content);
+    }
     if (validated.contentType !== undefined) updateData.contentType = validated.contentType;
     if (validated.templateId !== undefined) updateData.templateId = validated.templateId;
     if (validated.status !== undefined) updateData.status = validated.status;

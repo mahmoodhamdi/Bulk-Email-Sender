@@ -3,6 +3,7 @@ import { prisma } from '@/lib/db/prisma';
 import { createTemplateSchema, listTemplatesSchema } from '@/lib/validations/template';
 import { apiRateLimiter } from '@/lib/rate-limit';
 import { createInitialVersion } from '@/lib/template';
+import { sanitizeEmailHtml } from '@/lib/sanitize-server';
 import { ZodError } from 'zod';
 import { Prisma } from '@prisma/client';
 
@@ -133,12 +134,15 @@ export async function POST(request: NextRequest) {
       });
     }
 
+    // Sanitize HTML content to prevent XSS attacks (preserves merge tags)
+    const sanitizedContent = sanitizeEmailHtml(validated.content);
+
     // Create template
     const template = await prisma.template.create({
       data: {
         name: validated.name,
         subject: validated.subject,
-        content: validated.content,
+        content: sanitizedContent,
         thumbnail: validated.thumbnail,
         category: validated.category,
         isDefault: validated.isDefault,
@@ -150,7 +154,7 @@ export async function POST(request: NextRequest) {
     await createInitialVersion(template.id, {
       name: validated.name,
       subject: validated.subject,
-      content: validated.content,
+      content: sanitizedContent,
       thumbnail: validated.thumbnail,
       category: validated.category,
     }, template.userId ?? undefined);

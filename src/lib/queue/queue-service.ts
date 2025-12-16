@@ -20,7 +20,8 @@ import {
 } from '../email/merge-tags';
 
 /**
- * Queue a campaign for sending
+ * Queue a campaign for sending using cursor-based pagination
+ * This prevents loading all recipients into memory at once for large campaigns
  */
 export async function queueCampaign(
   campaignId: string,
@@ -40,18 +41,18 @@ export async function queueCampaign(
   const priority = JOB_PRIORITIES[options?.priority || 'NORMAL'];
 
   try {
-    // Get campaign with recipients
+    // Get campaign (without recipients - we'll fetch them in batches)
     const campaign = await prisma.campaign.findUnique({
       where: { id: campaignId },
-      include: {
-        recipients: {
-          where: {
-            status: 'PENDING',
-          },
-          include: {
-            contact: true,
-          },
-        },
+      select: {
+        id: true,
+        name: true,
+        subject: true,
+        content: true,
+        fromName: true,
+        fromEmail: true,
+        replyTo: true,
+        status: true,
       },
     });
 
@@ -67,7 +68,15 @@ export async function queueCampaign(
       };
     }
 
-    if (campaign.recipients.length === 0) {
+    // Check if there are pending recipients
+    const pendingCount = await prisma.recipient.count({
+      where: {
+        campaignId,
+        status: 'PENDING',
+      },
+    });
+
+    if (pendingCount === 0) {
       return { success: false, queuedCount: 0, error: 'No recipients to send to' };
     }
 
@@ -77,18 +86,40 @@ export async function queueCampaign(
       data: {
         status: 'SENDING',
         startedAt: new Date(),
+        totalRecipients: pendingCount,
       },
     });
 
-    // Process recipients in batches
-    const recipients = campaign.recipients;
+    // Process recipients in batches using cursor-based pagination
     let queuedCount = 0;
+    let cursor: string | undefined;
+    let batchNumber = 0;
 
-    for (let i = 0; i < recipients.length; i += batchSize) {
-      const batch = recipients.slice(i, i + batchSize);
-      const batchDelay = i > 0 ? (i / batchSize) * delayBetweenBatches : 0;
+    while (true) {
+      // Fetch a batch of recipients using cursor
+      const recipients = await prisma.recipient.findMany({
+        where: {
+          campaignId,
+          status: 'PENDING',
+          ...(cursor ? { id: { gt: cursor } } : {}),
+        },
+        take: batchSize,
+        orderBy: { id: 'asc' },
+        include: {
+          contact: true,
+        },
+      });
 
-      const jobs = batch.map((recipient) => {
+      // No more recipients to process
+      if (recipients.length === 0) {
+        break;
+      }
+
+      // Calculate delay for this batch
+      const batchDelay = batchNumber > 0 ? batchNumber * delayBetweenBatches : 0;
+
+      // Create jobs for this batch
+      const jobs = recipients.map((recipient) => {
         const contact = recipient.contact;
 
         const jobData: EmailJobData = {
@@ -123,16 +154,19 @@ export async function queueCampaign(
       });
 
       await addEmailJobs(jobs);
-      queuedCount += batch.length;
-    }
+      queuedCount += recipients.length;
 
-    // Update total recipients count
-    await prisma.campaign.update({
-      where: { id: campaignId },
-      data: {
-        totalRecipients: recipients.length,
-      },
-    });
+      // Update cursor to the last recipient's ID
+      cursor = recipients[recipients.length - 1].id;
+      batchNumber++;
+
+      // Log progress for large campaigns
+      if (batchNumber % 10 === 0) {
+        console.log(
+          `[QueueService] Queued ${queuedCount}/${pendingCount} emails for campaign ${campaignId}`
+        );
+      }
+    }
 
     console.log(
       `[QueueService] Queued ${queuedCount} emails for campaign ${campaignId}`
@@ -352,34 +386,49 @@ export async function getQueueHealth(): Promise<{
 }
 
 /**
- * Retry failed recipients for a campaign
+ * Retry failed recipients for a campaign using cursor-based pagination
  */
 export async function retryFailedRecipients(
-  campaignId: string
+  campaignId: string,
+  options?: { batchSize?: number }
 ): Promise<{
   success: boolean;
   retriedCount: number;
 }> {
+  const batchSize = options?.batchSize || 100;
+
   try {
-    // Get failed recipients
-    const failedRecipients = await prisma.recipient.findMany({
+    // Get campaign details first
+    const campaign = await prisma.campaign.findUnique({
+      where: { id: campaignId },
+      select: {
+        id: true,
+        subject: true,
+        content: true,
+        fromName: true,
+        fromEmail: true,
+        replyTo: true,
+        status: true,
+      },
+    });
+
+    if (!campaign) {
+      return { success: false, retriedCount: 0 };
+    }
+
+    // Count failed recipients
+    const failedCount = await prisma.recipient.count({
       where: {
         campaignId,
         status: 'FAILED',
       },
-      include: {
-        contact: true,
-        campaign: true,
-      },
     });
 
-    if (failedRecipients.length === 0) {
+    if (failedCount === 0) {
       return { success: true, retriedCount: 0 };
     }
 
-    const campaign = failedRecipients[0].campaign;
-
-    // Reset recipient status to PENDING
+    // Reset all failed recipients to PENDING status
     await prisma.recipient.updateMany({
       where: {
         campaignId,
@@ -391,39 +440,73 @@ export async function retryFailedRecipients(
       },
     });
 
-    // Re-queue the emails
-    const jobs = failedRecipients.map((recipient) => {
-      const contact = recipient.contact;
+    // Process failed recipients in batches using cursor
+    let retriedCount = 0;
+    let cursor: string | undefined;
+    const retryTimestamp = Date.now();
 
-      const jobData: EmailJobData = {
-        recipientId: recipient.id,
-        campaignId: campaign.id,
-        email: recipient.email,
-        subject: campaign.subject,
-        content: campaign.content,
-        fromName: campaign.fromName,
-        fromEmail: campaign.fromEmail,
-        replyTo: campaign.replyTo || undefined,
-        trackingId: recipient.trackingId,
-        mergeData: {
-          firstName: contact?.firstName || '',
-          lastName: contact?.lastName || '',
+    while (true) {
+      // Fetch a batch of recipients (now PENDING after the updateMany)
+      const recipients = await prisma.recipient.findMany({
+        where: {
+          campaignId,
+          status: 'PENDING',
+          ...(cursor ? { id: { gt: cursor } } : {}),
+        },
+        take: batchSize,
+        orderBy: { id: 'asc' },
+        include: {
+          contact: true,
+        },
+      });
+
+      if (recipients.length === 0) {
+        break;
+      }
+
+      // Create jobs for this batch
+      const jobs = recipients.map((recipient) => {
+        const contact = recipient.contact;
+
+        const jobData: EmailJobData = {
+          recipientId: recipient.id,
+          campaignId: campaign.id,
           email: recipient.email,
-          company: contact?.company || '',
-          customField1: contact?.customField1 || '',
-          customField2: contact?.customField2 || '',
-        },
-      };
+          subject: campaign.subject,
+          content: campaign.content,
+          fromName: campaign.fromName,
+          fromEmail: campaign.fromEmail,
+          replyTo: campaign.replyTo || undefined,
+          trackingId: recipient.trackingId,
+          mergeData: {
+            firstName: contact?.firstName || '',
+            lastName: contact?.lastName || '',
+            email: recipient.email,
+            company: contact?.company || '',
+            customField1: contact?.customField1 || '',
+            customField2: contact?.customField2 || '',
+          },
+        };
 
-      return {
-        data: jobData,
-        options: {
-          jobId: `retry-${campaignId}-${recipient.id}-${Date.now()}`,
-        },
-      };
-    });
+        return {
+          data: jobData,
+          options: {
+            jobId: `retry-${campaignId}-${recipient.id}-${retryTimestamp}`,
+          },
+        };
+      });
 
-    await addEmailJobs(jobs);
+      await addEmailJobs(jobs);
+      retriedCount += recipients.length;
+
+      // Update cursor
+      cursor = recipients[recipients.length - 1].id;
+
+      // Stop if we've processed the expected count
+      if (retriedCount >= failedCount) {
+        break;
+      }
+    }
 
     // Update campaign status if needed
     if (campaign.status === 'COMPLETED') {
@@ -434,10 +517,10 @@ export async function retryFailedRecipients(
     }
 
     console.log(
-      `[QueueService] Retried ${failedRecipients.length} failed recipients for campaign ${campaignId}`
+      `[QueueService] Retried ${retriedCount} failed recipients for campaign ${campaignId}`
     );
 
-    return { success: true, retriedCount: failedRecipients.length };
+    return { success: true, retriedCount };
   } catch (error) {
     console.error(`[QueueService] Failed to retry recipients:`, error);
     return { success: false, retriedCount: 0 };

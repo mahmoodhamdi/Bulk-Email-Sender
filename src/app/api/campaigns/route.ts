@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
 import { createCampaignSchema, listCampaignsSchema } from '@/lib/validations/campaign';
 import { apiRateLimiter } from '@/lib/rate-limit';
+import { sanitizeEmailHtml } from '@/lib/sanitize-server';
 import { ZodError } from 'zod';
 
 /**
@@ -110,6 +111,9 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const validated = createCampaignSchema.parse(body);
 
+    // Sanitize HTML content to prevent XSS attacks (preserves merge tags)
+    const sanitizedContent = sanitizeEmailHtml(validated.content);
+
     // Create campaign
     const campaign = await prisma.campaign.create({
       data: {
@@ -118,7 +122,7 @@ export async function POST(request: NextRequest) {
         fromName: validated.fromName,
         fromEmail: validated.fromEmail,
         replyTo: validated.replyTo,
-        content: validated.content,
+        content: sanitizedContent,
         contentType: validated.contentType,
         templateId: validated.templateId,
         scheduledAt: validated.scheduledAt ? new Date(validated.scheduledAt) : null,

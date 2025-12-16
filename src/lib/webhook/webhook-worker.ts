@@ -3,6 +3,7 @@ import { createRedisConnection } from '../queue/redis';
 import { prisma } from '../db/prisma';
 import { buildAuthHeaders } from './signature';
 import { scheduleWebhookRetry } from './webhook-queue';
+import { validateWebhookUrl } from '../ssrf-protection';
 import {
   WEBHOOK_QUEUE_NAME,
   DEFAULT_WEBHOOK_CONFIG,
@@ -27,6 +28,31 @@ async function processWebhookJob(
   );
 
   try {
+    // SSRF Protection: Validate the webhook URL before making the request
+    const ssrfValidation = await validateWebhookUrl(data.url);
+    if (!ssrfValidation.safe) {
+      const errorMessage = `SSRF protection: ${ssrfValidation.reason || 'URL blocked for security reasons'}`;
+      console.error(`[Webhook Worker] Job ${job.id} blocked:`, errorMessage);
+
+      // Mark as failed immediately - don't retry SSRF blocked requests
+      await prisma.webhookDelivery.update({
+        where: { id: data.deliveryId },
+        data: {
+          status: 'FAILED',
+          error: errorMessage,
+          attempts: data.attempt,
+        },
+      });
+
+      return {
+        success: false,
+        deliveryId: data.deliveryId,
+        webhookId: data.webhookId,
+        error: errorMessage,
+        responseTime: 0,
+      };
+    }
+
     // Update delivery status to PROCESSING
     await prisma.webhookDelivery.update({
       where: { id: data.deliveryId },
