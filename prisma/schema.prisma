@@ -329,6 +329,10 @@ model Recipient {
   contact     Contact? @relation(fields: [contactId], references: [id])
   email       String
 
+  // A/B Test variant assignment
+  variantId   String?
+  variant     ABTestVariant? @relation(fields: [variantId], references: [id])
+
   status      RecipientStatus @default(PENDING)
   sentAt      DateTime?
   deliveredAt DateTime?
@@ -356,6 +360,7 @@ model Recipient {
   @@index([campaignId, status])
   @@index([sentAt])
   @@index([createdAt])
+  @@index([variantId])
 }
 
 enum RecipientStatus {
@@ -587,6 +592,9 @@ model ABTestVariant {
 
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+
+  // Recipients assigned to this variant
+  recipients  Recipient[]
 
   @@index([testId])
 }

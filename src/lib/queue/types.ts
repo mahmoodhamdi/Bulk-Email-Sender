@@ -14,6 +14,7 @@ export interface EmailJobData {
   replyTo?: string;
   trackingId: string;
   smtpConfigId?: string;
+  variantId?: string; // A/B test variant ID
   mergeData: {
     firstName?: string;
     lastName?: string;
