@@ -1,6 +1,7 @@
 import { prisma } from '../db/prisma';
 import { encryptString, decryptString } from '../crypto';
 import { addWebhookJob } from './webhook-queue';
+import { validateWebhookUrl } from '../ssrf-protection';
 import {
   type WebhookEvent,
   type WebhookEventData,
@@ -217,6 +218,16 @@ export async function testWebhook(
 
   if (!webhook) {
     throw new Error('Webhook not found');
+  }
+
+  // SSRF Protection: Validate the webhook URL before making the request
+  const ssrfValidation = await validateWebhookUrl(webhook.url);
+  if (!ssrfValidation.safe) {
+    return {
+      success: false,
+      responseTime: 0,
+      error: `SSRF protection: ${ssrfValidation.reason || 'URL blocked for security reasons'}`,
+    };
   }
 
   const startTime = Date.now();

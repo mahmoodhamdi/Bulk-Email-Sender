@@ -332,8 +332,10 @@ const DOMPURIFY_CONFIG: DOMPurify.Config = {
 };
 
 /**
- * Sanitize HTML content to prevent XSS attacks
+ * Sanitize HTML content to prevent XSS attacks (client-side only)
  * Uses DOMPurify with a configuration suitable for email content
+ *
+ * NOTE: For server-side sanitization, use sanitizeHtmlServer from @/lib/sanitize-server
  *
  * @param html - The HTML content to sanitize
  * @param options - Optional DOMPurify configuration overrides
@@ -342,17 +344,19 @@ const DOMPURIFY_CONFIG: DOMPurify.Config = {
 export function sanitizeHtml(html: string, options?: DOMPurify.Config): string {
   if (!html || typeof html !== 'string') return '';
 
-  // In server-side rendering, DOMPurify may not work without a DOM
-  // Return escaped HTML as a fallback
-  if (typeof window === 'undefined') {
-    // For SSR, we return the HTML as-is since it will be sanitized on client
-    // The actual sanitization happens in the browser where DOMPurify has access to DOM
-    return html;
-  }
-
   // Type assertion needed due to DOMPurify type definition mismatches between esm and cjs
   const config = { ...DOMPURIFY_CONFIG, ...options } as unknown as Parameters<typeof DOMPurify.sanitize>[1];
-  return DOMPurify.sanitize(html, config) as string;
+
+  // On client, use browser DOMPurify directly
+  if (typeof window !== 'undefined') {
+    return DOMPurify.sanitize(html, config) as string;
+  }
+
+  // On server, DOMPurify won't work without a DOM
+  // Return the HTML as-is; API routes should use sanitizeHtmlServer instead
+  // This is kept for backward compatibility with SSR components
+  console.warn('[sanitizeHtml] Called on server - use sanitizeHtmlServer for API routes');
+  return html;
 }
 
 /**
