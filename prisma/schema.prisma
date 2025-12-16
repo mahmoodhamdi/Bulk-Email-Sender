@@ -190,6 +190,9 @@ model Template {
   category    String?
   isDefault   Boolean  @default(false)
 
+  // Version tracking
+  currentVersion Int @default(1)
+
   // Owner
   userId      String?
   user        User?    @relation(fields: [userId], references: [id])
@@ -198,10 +201,42 @@ model Template {
   updatedAt   DateTime @updatedAt
 
   campaigns   Campaign[]
+  versions    TemplateVersion[]
 
   @@unique([name, userId])
   @@index([category])
   @@index([userId])
+}
+
+model TemplateVersion {
+  id          String   @id @default(cuid())
+  templateId  String
+  template    Template @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+  version     Int
+  name        String
+  subject     String?
+  content     String   @db.Text
+  thumbnail   String?
+  category    String?
+
+  // Change tracking
+  changeType    VersionChangeType @default(UPDATE)
+  changeSummary String?
+
+  // Audit
+  createdBy   String?
+  createdAt   DateTime @default(now())
+
+  @@unique([templateId, version])
+  @@index([templateId])
+  @@index([createdAt])
+}
+
+enum VersionChangeType {
+  CREATE
+  UPDATE
+  REVERT
 }
 
 model Contact {

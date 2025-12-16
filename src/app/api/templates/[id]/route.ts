@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
 import { updateTemplateSchema, templateIdSchema, duplicateTemplateSchema } from '@/lib/validations/template';
 import { apiRateLimiter } from '@/lib/rate-limit';
+import { createVersion, createInitialVersion } from '@/lib/template';
 import { ZodError } from 'zod';
 
 interface RouteParams {
@@ -93,10 +94,18 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     // Validate ID
     templateIdSchema.parse({ id });
 
-    // Check if template exists
+    // Check if template exists and get full data for versioning
     const existing = await prisma.template.findUnique({
       where: { id },
-      select: { id: true, name: true },
+      select: {
+        id: true,
+        name: true,
+        subject: true,
+        content: true,
+        thumbnail: true,
+        category: true,
+        userId: true,
+      },
     });
 
     if (!existing) {
@@ -145,6 +154,24 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       where: { id },
       data: updateData,
     });
+
+    // Create a new version if versioned fields changed
+    const oldData = {
+      name: existing.name,
+      subject: existing.subject,
+      content: existing.content,
+      thumbnail: existing.thumbnail,
+      category: existing.category,
+    };
+    const newData = {
+      name: template.name,
+      subject: template.subject,
+      content: template.content,
+      thumbnail: template.thumbnail,
+      category: template.category,
+    };
+
+    await createVersion(id, oldData, newData, existing.userId ?? undefined);
 
     return NextResponse.json({ data: template });
   } catch (error) {
@@ -292,8 +319,18 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         thumbnail: original.thumbnail,
         category: original.category,
         isDefault: false, // Duplicates are never default
+        currentVersion: 1,
       },
     });
+
+    // Create initial version for the duplicate
+    await createInitialVersion(template.id, {
+      name: validated.name,
+      subject: original.subject,
+      content: original.content,
+      thumbnail: original.thumbnail,
+      category: original.category,
+    }, template.userId ?? undefined);
 
     return NextResponse.json({ data: template }, { status: 201 });
   } catch (error) {

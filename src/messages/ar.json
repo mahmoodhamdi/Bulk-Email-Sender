@@ -351,7 +351,64 @@
     "templateName": "اسم القالب",
     "templateNamePlaceholder": "قالبي",
     "saveTemplate": "حفظ القالب",
-    "templateSaved": "تم حفظ القالب!"
+    "templateSaved": "تم حفظ القالب!",
+    "versions": {
+      "title": "سجل الإصدارات",
+      "subtitle": "عرض وإدارة إصدارات القالب",
+      "currentVersion": "الإصدار الحالي",
+      "version": "الإصدار {number}",
+      "noVersions": "لا يوجد سجل إصدارات",
+      "viewVersion": "عرض الإصدار",
+      "revertToVersion": "الرجوع لهذا الإصدار",
+      "compareVersions": "مقارنة الإصدارات",
+      "selectVersions": "اختر إصدارين للمقارنة",
+      "changeType": {
+        "create": "إنشاء",
+        "update": "تحديث",
+        "revert": "استرجاع"
+      },
+      "changes": {
+        "name": "الاسم",
+        "subject": "الموضوع",
+        "content": "المحتوى",
+        "category": "الفئة",
+        "noChanges": "لا توجد تغييرات",
+        "changed": "تم التغيير",
+        "unchanged": "بدون تغيير"
+      },
+      "revert": {
+        "title": "الرجوع للإصدار {version}",
+        "description": "سيتم إنشاء إصدار جديد بمحتوى الإصدار {version}. سيتم الاحتفاظ بالإصدار الحالي في السجل.",
+        "confirmButton": "استرجاع",
+        "cancelButton": "إلغاء",
+        "summary": "ملخص التغيير (اختياري)",
+        "summaryPlaceholder": "سبب الاسترجاع...",
+        "success": "تم الرجوع بنجاح للإصدار {version}",
+        "error": "فشل في الرجوع للإصدار"
+      },
+      "compare": {
+        "title": "مقارنة الإصدارات",
+        "version1": "الإصدار {number}",
+        "version2": "الإصدار {number}",
+        "differences": "الاختلافات",
+        "noDifferences": "لا توجد اختلافات",
+        "field": "الحقل",
+        "status": "الحالة"
+      },
+      "table": {
+        "version": "الإصدار",
+        "changeType": "نوع التغيير",
+        "changeSummary": "الملخص",
+        "createdAt": "التاريخ",
+        "createdBy": "بواسطة",
+        "actions": "الإجراءات"
+      },
+      "messages": {
+        "loadError": "فشل في تحميل سجل الإصدارات",
+        "revertSuccess": "تم استرجاع القالب بنجاح",
+        "revertError": "فشل في استرجاع القالب"
+      }
+    }
   },
   "contacts": {
     "title": "جهات الاتصال",

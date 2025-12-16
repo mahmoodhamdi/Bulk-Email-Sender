@@ -351,7 +351,64 @@
     "templateName": "Template Name",
     "templateNamePlaceholder": "My Template",
     "saveTemplate": "Save Template",
-    "templateSaved": "Template saved!"
+    "templateSaved": "Template saved!",
+    "versions": {
+      "title": "Version History",
+      "subtitle": "View and manage template versions",
+      "currentVersion": "Current Version",
+      "version": "Version {number}",
+      "noVersions": "No version history available",
+      "viewVersion": "View Version",
+      "revertToVersion": "Revert to This Version",
+      "compareVersions": "Compare Versions",
+      "selectVersions": "Select two versions to compare",
+      "changeType": {
+        "create": "Created",
+        "update": "Updated",
+        "revert": "Reverted"
+      },
+      "changes": {
+        "name": "Name",
+        "subject": "Subject",
+        "content": "Content",
+        "category": "Category",
+        "noChanges": "No changes",
+        "changed": "Changed",
+        "unchanged": "Unchanged"
+      },
+      "revert": {
+        "title": "Revert to Version {version}",
+        "description": "This will create a new version with the content from version {version}. The current version will be preserved in history.",
+        "confirmButton": "Revert",
+        "cancelButton": "Cancel",
+        "summary": "Change Summary (optional)",
+        "summaryPlaceholder": "Reason for reverting...",
+        "success": "Successfully reverted to version {version}",
+        "error": "Failed to revert to version"
+      },
+      "compare": {
+        "title": "Compare Versions",
+        "version1": "Version {number}",
+        "version2": "Version {number}",
+        "differences": "Differences",
+        "noDifferences": "No differences found",
+        "field": "Field",
+        "status": "Status"
+      },
+      "table": {
+        "version": "Version",
+        "changeType": "Change Type",
+        "changeSummary": "Summary",
+        "createdAt": "Date",
+        "createdBy": "By",
+        "actions": "Actions"
+      },
+      "messages": {
+        "loadError": "Failed to load version history",
+        "revertSuccess": "Template reverted successfully",
+        "revertError": "Failed to revert template"
+      }
+    }
   },
   "contacts": {
     "title": "Contacts",
