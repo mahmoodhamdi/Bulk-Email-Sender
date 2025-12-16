@@ -2,8 +2,6 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
   generateSecureId,
   generateShortId,
-  obfuscate,
-  deobfuscate,
   hashString,
   escapeHtml,
   escapeCSV,
@@ -48,37 +46,6 @@ describe('Crypto Utilities', () => {
     it('should generate hexadecimal characters', () => {
       const id = generateShortId();
       expect(/^[0-9a-f]+$/.test(id)).toBe(true);
-    });
-  });
-
-  describe('obfuscate and deobfuscate', () => {
-    it('should round-trip text correctly', () => {
-      const original = 'secret password 123!@#';
-      const obfuscated = obfuscate(original);
-      const recovered = deobfuscate(obfuscated);
-      expect(recovered).toBe(original);
-    });
-
-    it('should produce different output than input', () => {
-      const original = 'test';
-      const obfuscated = obfuscate(original);
-      expect(obfuscated).not.toBe(original);
-    });
-
-    it('should handle empty strings', () => {
-      expect(obfuscate('')).toBe('');
-      expect(deobfuscate('')).toBe('');
-    });
-
-    it('should handle ASCII special characters', () => {
-      const original = 'Hello!@#$%^&*()_+-=[]{}|;:,.<>?';
-      const obfuscated = obfuscate(original);
-      const recovered = deobfuscate(obfuscated);
-      expect(recovered).toBe(original);
-    });
-
-    it('should return empty string for invalid input', () => {
-      expect(deobfuscate('not-valid-base64!@#')).toBe('');
     });
   });
 
