@@ -34,6 +34,7 @@ model User {
   contactLists  ContactList[]
   smtpConfigs   SmtpConfig[]
   webhooks      Webhook[]
+  abTests       ABTest[]
 
   @@index([email])
   @@index([role])
@@ -166,6 +167,7 @@ model Campaign {
 
   recipients    Recipient[]
   events        EmailEvent[]
+  abTest        ABTest?
 
   @@index([status])
   @@index([createdAt])
@@ -521,4 +523,89 @@ enum WebhookDeliveryStatus {
   DELIVERED
   FAILED
   RETRYING
+}
+
+// ==================== A/B Testing Models ====================
+
+model ABTest {
+  id          String   @id @default(cuid())
+  campaignId  String
+  campaign    Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  name        String
+  testType    ABTestType
+
+  // Configuration
+  sampleSize     Int @default(20)    // Percentage of recipients for test
+  winnerCriteria WinnerCriteria @default(OPEN_RATE)
+  testDuration   Int @default(4)      // Hours to run test before selecting winner
+  autoSelectWinner Boolean @default(true)
+
+  // Status
+  status      ABTestStatus @default(DRAFT)
+  winnerId    String?      // ID of winning variant
+  startedAt   DateTime?
+  completedAt DateTime?
+
+  // Owner
+  userId      String?
+  user        User?    @relation(fields: [userId], references: [id])
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  variants    ABTestVariant[]
+
+  @@unique([campaignId])
+  @@index([campaignId])
+  @@index([userId])
+  @@index([status])
+}
+
+model ABTestVariant {
+  id          String   @id @default(cuid())
+  testId      String
+  test        ABTest   @relation(fields: [testId], references: [id], onDelete: Cascade)
+
+  name        String
+  // Variant content (depends on test type)
+  subject     String?
+  content     String?  @db.Text
+  fromName    String?
+  sendTime    DateTime?
+
+  // Results
+  sent        Int @default(0)
+  opened      Int @default(0)
+  clicked     Int @default(0)
+  converted   Int @default(0)
+  bounced     Int @default(0)
+
+  // Order for display
+  sortOrder   Int @default(0)
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([testId])
+}
+
+enum ABTestType {
+  SUBJECT
+  CONTENT
+  FROM_NAME
+  SEND_TIME
+}
+
+enum ABTestStatus {
+  DRAFT
+  RUNNING
+  COMPLETED
+  CANCELLED
+}
+
+enum WinnerCriteria {
+  OPEN_RATE
+  CLICK_RATE
+  CONVERSION_RATE
 }
