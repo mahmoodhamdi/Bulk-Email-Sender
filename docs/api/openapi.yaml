@@ -1,0 +1,1389 @@
+openapi: 3.1.0
+info:
+  title: Bulk Email Sender API
+  description: |
+    REST API for the Bulk Email Sender application.
+
+    ## Authentication
+
+    The API supports multiple authentication methods:
+    - **Session-based**: Cookie authentication via NextAuth.js
+    - **API Keys**: Bearer token with `bes_` prefix
+
+    API keys are passed via the `Authorization` header:
+    ```
+    Authorization: Bearer bes_your_api_key_here
+    ```
+
+    ## Rate Limiting
+
+    All endpoints are rate limited:
+    - General API: 100 requests/minute
+    - Authentication: 5 requests/minute
+    - SMTP Test: 5 requests/5 minutes
+    - Email Send: 10 requests/minute
+
+    Rate limit headers are included in responses:
+    - `X-RateLimit-Limit`: Maximum requests allowed
+    - `X-RateLimit-Remaining`: Remaining requests in window
+    - `X-RateLimit-Reset`: Unix timestamp when limit resets
+
+  version: 1.0.0
+  contact:
+    email: support@example.com
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: /api
+    description: API base path
+
+tags:
+  - name: Campaigns
+    description: Email campaign management
+  - name: Contacts
+    description: Contact and list management
+  - name: Templates
+    description: Email template management
+  - name: Analytics
+    description: Email tracking and analytics
+  - name: Queue
+    description: Email queue management
+  - name: Webhooks
+    description: Outbound webhook management
+  - name: A/B Tests
+    description: A/B testing management
+  - name: Authentication
+    description: User authentication and API keys
+  - name: Admin
+    description: Admin-only endpoints
+
+paths:
+  # Campaigns
+  /campaigns:
+    get:
+      summary: List campaigns
+      tags: [Campaigns]
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+            maximum: 100
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [DRAFT, SCHEDULED, SENDING, PAUSED, COMPLETED, CANCELLED]
+        - name: search
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of campaigns
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CampaignListResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+
+    post:
+      summary: Create a campaign
+      tags: [Campaigns]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateCampaignRequest'
+      responses:
+        '201':
+          description: Campaign created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CampaignResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /campaigns/{id}:
+    get:
+      summary: Get campaign details
+      tags: [Campaigns]
+      parameters:
+        - $ref: '#/components/parameters/CampaignId'
+      responses:
+        '200':
+          description: Campaign details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CampaignResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    patch:
+      summary: Update a campaign
+      tags: [Campaigns]
+      parameters:
+        - $ref: '#/components/parameters/CampaignId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateCampaignRequest'
+      responses:
+        '200':
+          description: Campaign updated
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      summary: Delete a campaign
+      tags: [Campaigns]
+      parameters:
+        - $ref: '#/components/parameters/CampaignId'
+      responses:
+        '200':
+          description: Campaign deleted
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /campaigns/{id}/send:
+    post:
+      summary: Start sending a campaign
+      tags: [Campaigns]
+      parameters:
+        - $ref: '#/components/parameters/CampaignId'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                priority:
+                  type: string
+                  enum: [HIGH, NORMAL, LOW]
+                batchSize:
+                  type: integer
+                  minimum: 1
+                  maximum: 1000
+                scheduledAt:
+                  type: string
+                  format: date-time
+      responses:
+        '200':
+          description: Campaign sending started
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    patch:
+      summary: Control campaign sending
+      tags: [Campaigns]
+      parameters:
+        - $ref: '#/components/parameters/CampaignId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [action]
+              properties:
+                action:
+                  type: string
+                  enum: [pause, resume, cancel, retry]
+      responses:
+        '200':
+          description: Action performed
+        '400':
+          $ref: '#/components/responses/ValidationError'
+
+  /campaigns/{id}/recipients:
+    get:
+      summary: List campaign recipients
+      tags: [Campaigns]
+      parameters:
+        - $ref: '#/components/parameters/CampaignId'
+        - name: cursor
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [PENDING, QUEUED, SENT, DELIVERED, OPENED, CLICKED, BOUNCED, FAILED]
+      responses:
+        '200':
+          description: List of recipients with cursor pagination
+
+    post:
+      summary: Add recipients to campaign
+      tags: [Campaigns]
+      parameters:
+        - $ref: '#/components/parameters/CampaignId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                emails:
+                  type: array
+                  items:
+                    type: string
+                    format: email
+                listIds:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        '201':
+          description: Recipients added
+
+  /campaigns/{id}/queue-status:
+    get:
+      summary: Get campaign queue status
+      tags: [Campaigns]
+      parameters:
+        - $ref: '#/components/parameters/CampaignId'
+      responses:
+        '200':
+          description: Queue status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QueueStatus'
+
+  # Contacts
+  /contacts:
+    get:
+      summary: List contacts
+      tags: [Contacts]
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+        - name: limit
+          in: query
+          schema:
+            type: integer
+        - name: search
+          in: query
+          schema:
+            type: string
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [ACTIVE, UNSUBSCRIBED, BOUNCED, COMPLAINED]
+      responses:
+        '200':
+          description: List of contacts
+
+    post:
+      summary: Create a contact
+      tags: [Contacts]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateContactRequest'
+      responses:
+        '201':
+          description: Contact created
+        '409':
+          description: Contact already exists
+
+  /contacts/{id}:
+    get:
+      summary: Get contact details
+      tags: [Contacts]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Contact details
+
+    patch:
+      summary: Update a contact
+      tags: [Contacts]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Contact updated
+
+    delete:
+      summary: Delete a contact
+      tags: [Contacts]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Contact deleted
+
+  /contacts/bulk:
+    post:
+      summary: Bulk import contacts
+      tags: [Contacts]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+                listId:
+                  type: string
+      responses:
+        '200':
+          description: Import results
+
+  # Contact Lists
+  /lists:
+    get:
+      summary: List contact lists
+      tags: [Contacts]
+      responses:
+        '200':
+          description: List of contact lists
+
+    post:
+      summary: Create a contact list
+      tags: [Contacts]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:
+                  type: string
+                description:
+                  type: string
+      responses:
+        '201':
+          description: List created
+
+  # Templates
+  /templates:
+    get:
+      summary: List templates
+      tags: [Templates]
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+        - name: limit
+          in: query
+          schema:
+            type: integer
+        - name: category
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of templates
+
+    post:
+      summary: Create a template
+      tags: [Templates]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateTemplateRequest'
+      responses:
+        '201':
+          description: Template created
+
+  /templates/{id}:
+    get:
+      summary: Get template details
+      tags: [Templates]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Template details
+
+    patch:
+      summary: Update a template
+      tags: [Templates]
+      responses:
+        '200':
+          description: Template updated
+
+    delete:
+      summary: Delete a template
+      tags: [Templates]
+      responses:
+        '200':
+          description: Template deleted
+
+  /templates/{id}/versions:
+    get:
+      summary: List template versions
+      tags: [Templates]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: page
+          in: query
+          schema:
+            type: integer
+        - name: limit
+          in: query
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: List of versions
+
+  /templates/{id}/versions/{version}/revert:
+    post:
+      summary: Revert to a specific version
+      tags: [Templates]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: version
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Template reverted
+
+  # Queue
+  /queue:
+    get:
+      summary: Get queue health status
+      tags: [Queue]
+      responses:
+        '200':
+          description: Queue health information
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QueueHealth'
+
+    post:
+      summary: Control queue operations
+      tags: [Queue]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [action]
+              properties:
+                action:
+                  type: string
+                  enum: [pause, resume, clean, stats]
+      responses:
+        '200':
+          description: Action performed
+
+  # Webhooks
+  /webhooks:
+    get:
+      summary: List webhooks
+      tags: [Webhooks]
+      responses:
+        '200':
+          description: List of webhooks
+
+    post:
+      summary: Create a webhook
+      tags: [Webhooks]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateWebhookRequest'
+      responses:
+        '201':
+          description: Webhook created
+
+  /webhooks/{id}:
+    get:
+      summary: Get webhook details
+      tags: [Webhooks]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Webhook details with stats
+
+    patch:
+      summary: Update a webhook
+      tags: [Webhooks]
+      responses:
+        '200':
+          description: Webhook updated
+
+    delete:
+      summary: Delete a webhook
+      tags: [Webhooks]
+      responses:
+        '200':
+          description: Webhook deleted
+
+  /webhooks/{id}/test:
+    post:
+      summary: Test webhook connectivity
+      tags: [Webhooks]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Test result
+
+  /webhooks/{id}/deliveries:
+    get:
+      summary: List webhook deliveries
+      tags: [Webhooks]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of deliveries
+
+  /webhooks/events:
+    get:
+      summary: List available webhook events
+      tags: [Webhooks]
+      responses:
+        '200':
+          description: List of events
+
+  # A/B Tests
+  /ab-tests:
+    get:
+      summary: List A/B tests
+      tags: [A/B Tests]
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+        - name: limit
+          in: query
+          schema:
+            type: integer
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [DRAFT, RUNNING, COMPLETED, CANCELLED]
+      responses:
+        '200':
+          description: List of A/B tests
+
+    post:
+      summary: Create an A/B test
+      tags: [A/B Tests]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateABTestRequest'
+      responses:
+        '201':
+          description: A/B test created
+
+  /ab-tests/{id}:
+    get:
+      summary: Get A/B test details with stats
+      tags: [A/B Tests]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: A/B test with stats
+
+    patch:
+      summary: Update A/B test or perform actions
+      tags: [A/B Tests]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                action:
+                  type: string
+                  enum: [start, select-winner, auto-select-winner, cancel, add-variant, update-variant, remove-variant]
+                variantId:
+                  type: string
+      responses:
+        '200':
+          description: Action performed
+
+    delete:
+      summary: Delete an A/B test
+      tags: [A/B Tests]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: A/B test deleted
+
+  # Tracking
+  /tracking/open:
+    get:
+      summary: Track email open
+      tags: [Analytics]
+      parameters:
+        - name: id
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 1x1 tracking pixel
+
+  /tracking/click:
+    get:
+      summary: Track link click
+      tags: [Analytics]
+      parameters:
+        - name: id
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: url
+          in: query
+          required: true
+          schema:
+            type: string
+            format: uri
+      responses:
+        '302':
+          description: Redirect to target URL
+
+  /tracking/unsubscribe:
+    get:
+      summary: Handle unsubscribe
+      tags: [Analytics]
+      parameters:
+        - name: id
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Unsubscribe page
+
+  /tracking/events:
+    get:
+      summary: List tracking events
+      tags: [Analytics]
+      parameters:
+        - name: campaignId
+          in: query
+          schema:
+            type: string
+        - name: recipientId
+          in: query
+          schema:
+            type: string
+        - name: eventType
+          in: query
+          schema:
+            type: string
+            enum: [SENT, DELIVERED, OPENED, CLICKED, BOUNCED, UNSUBSCRIBED, COMPLAINED]
+      responses:
+        '200':
+          description: List of events
+
+  # Authentication
+  /auth/register:
+    post:
+      summary: Register a new user
+      tags: [Authentication]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password, name]
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+                  minLength: 8
+                name:
+                  type: string
+      responses:
+        '201':
+          description: User registered
+        '409':
+          description: Email already exists
+
+  /auth/me:
+    get:
+      summary: Get current user profile
+      tags: [Authentication]
+      responses:
+        '200':
+          description: User profile
+
+    patch:
+      summary: Update profile
+      tags: [Authentication]
+      responses:
+        '200':
+          description: Profile updated
+
+    put:
+      summary: Change password
+      tags: [Authentication]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [currentPassword, newPassword]
+              properties:
+                currentPassword:
+                  type: string
+                newPassword:
+                  type: string
+                  minLength: 8
+      responses:
+        '200':
+          description: Password changed
+
+  /auth/api-keys:
+    get:
+      summary: List API keys
+      tags: [Authentication]
+      responses:
+        '200':
+          description: List of API keys (keys are masked)
+
+    post:
+      summary: Create an API key
+      tags: [Authentication]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, permissions]
+              properties:
+                name:
+                  type: string
+                permissions:
+                  type: array
+                  items:
+                    type: string
+                expiresAt:
+                  type: string
+                  format: date-time
+      responses:
+        '201':
+          description: API key created (full key shown only once)
+
+  /auth/api-keys/{id}:
+    get:
+      summary: Get API key details
+      tags: [Authentication]
+      responses:
+        '200':
+          description: API key details
+
+    patch:
+      summary: Update API key
+      tags: [Authentication]
+      responses:
+        '200':
+          description: API key updated
+
+    delete:
+      summary: Delete API key
+      tags: [Authentication]
+      responses:
+        '200':
+          description: API key deleted
+
+  # Admin
+  /admin/users:
+    get:
+      summary: List all users (Admin only)
+      tags: [Admin]
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+        - name: limit
+          in: query
+          schema:
+            type: integer
+        - name: search
+          in: query
+          schema:
+            type: string
+        - name: role
+          in: query
+          schema:
+            type: string
+            enum: [USER, ADMIN, SUPER_ADMIN]
+      responses:
+        '200':
+          description: List of users
+        '403':
+          description: Forbidden - Admin access required
+
+  /admin/users/{id}:
+    get:
+      summary: Get user details (Admin only)
+      tags: [Admin]
+      responses:
+        '200':
+          description: User details
+
+    patch:
+      summary: Update user (Admin only)
+      tags: [Admin]
+      responses:
+        '200':
+          description: User updated
+
+    delete:
+      summary: Delete user (Super Admin only)
+      tags: [Admin]
+      responses:
+        '200':
+          description: User deleted
+        '403':
+          description: Forbidden - Super Admin access required
+
+  # Email
+  /email/test:
+    post:
+      summary: Send test email
+      tags: [Campaigns]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [to, subject, htmlContent, smtpConfig]
+              properties:
+                to:
+                  type: array
+                  items:
+                    type: string
+                    format: email
+                  maxItems: 5
+                subject:
+                  type: string
+                htmlContent:
+                  type: string
+                textContent:
+                  type: string
+                fromName:
+                  type: string
+                fromEmail:
+                  type: string
+                  format: email
+                smtpConfig:
+                  $ref: '#/components/schemas/SmtpConfig'
+      responses:
+        '200':
+          description: Test email results
+
+  /smtp/test:
+    post:
+      summary: Test SMTP connection
+      tags: [Campaigns]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SmtpConfig'
+      responses:
+        '200':
+          description: Connection successful
+        '400':
+          description: Connection failed
+
+  # Health
+  /health:
+    get:
+      summary: Health check
+      tags: []
+      responses:
+        '200':
+          description: Service is healthy
+
+components:
+  parameters:
+    CampaignId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+      description: Campaign ID
+
+  schemas:
+    CampaignListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Campaign'
+        pagination:
+          $ref: '#/components/schemas/Pagination'
+
+    CampaignResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/Campaign'
+
+    Campaign:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        subject:
+          type: string
+        fromName:
+          type: string
+        fromEmail:
+          type: string
+          format: email
+        status:
+          type: string
+          enum: [DRAFT, SCHEDULED, SENDING, PAUSED, COMPLETED, CANCELLED]
+        totalRecipients:
+          type: integer
+        sentCount:
+          type: integer
+        openedCount:
+          type: integer
+        clickedCount:
+          type: integer
+        bouncedCount:
+          type: integer
+        scheduledAt:
+          type: string
+          format: date-time
+        startedAt:
+          type: string
+          format: date-time
+        completedAt:
+          type: string
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    CreateCampaignRequest:
+      type: object
+      required: [name, subject, fromName, fromEmail, content]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+        subject:
+          type: string
+          minLength: 1
+          maxLength: 998
+        fromName:
+          type: string
+          minLength: 1
+          maxLength: 100
+        fromEmail:
+          type: string
+          format: email
+        replyTo:
+          type: string
+          format: email
+        content:
+          type: string
+
+    UpdateCampaignRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        subject:
+          type: string
+        fromName:
+          type: string
+        fromEmail:
+          type: string
+          format: email
+        content:
+          type: string
+        status:
+          type: string
+          enum: [DRAFT, SCHEDULED]
+
+    CreateContactRequest:
+      type: object
+      required: [email]
+      properties:
+        email:
+          type: string
+          format: email
+        firstName:
+          type: string
+        lastName:
+          type: string
+        company:
+          type: string
+        phone:
+          type: string
+        tags:
+          type: array
+          items:
+            type: string
+        customField1:
+          type: string
+        customField2:
+          type: string
+
+    CreateTemplateRequest:
+      type: object
+      required: [name, subject, content]
+      properties:
+        name:
+          type: string
+        subject:
+          type: string
+        content:
+          type: string
+        category:
+          type: string
+
+    CreateWebhookRequest:
+      type: object
+      required: [url, events]
+      properties:
+        url:
+          type: string
+          format: uri
+        events:
+          type: array
+          items:
+            type: string
+        authType:
+          type: string
+          enum: [NONE, BASIC, BEARER, API_KEY, HMAC]
+        authValue:
+          type: string
+        authHeader:
+          type: string
+        isActive:
+          type: boolean
+          default: true
+
+    CreateABTestRequest:
+      type: object
+      required: [campaignId, name, testType, variants]
+      properties:
+        campaignId:
+          type: string
+        name:
+          type: string
+        testType:
+          type: string
+          enum: [SUBJECT, CONTENT, FROM_NAME, SEND_TIME]
+        sampleSize:
+          type: integer
+          minimum: 5
+          maximum: 100
+          default: 20
+        winnerCriteria:
+          type: string
+          enum: [OPEN_RATE, CLICK_RATE, CONVERSION_RATE]
+          default: OPEN_RATE
+        testDuration:
+          type: integer
+          minimum: 1
+          maximum: 168
+          default: 4
+        autoSelectWinner:
+          type: boolean
+          default: true
+        variants:
+          type: array
+          minItems: 2
+          maxItems: 5
+          items:
+            type: object
+            required: [name]
+            properties:
+              name:
+                type: string
+              subject:
+                type: string
+              content:
+                type: string
+              fromName:
+                type: string
+              sendTime:
+                type: string
+                format: date-time
+
+    SmtpConfig:
+      type: object
+      required: [host, port, username, password]
+      properties:
+        host:
+          type: string
+        port:
+          type: integer
+        secure:
+          type: boolean
+          default: false
+        username:
+          type: string
+        password:
+          type: string
+
+    QueueStatus:
+      type: object
+      properties:
+        campaignId:
+          type: string
+        totalRecipients:
+          type: integer
+        queued:
+          type: integer
+        sent:
+          type: integer
+        failed:
+          type: integer
+        progress:
+          type: integer
+        status:
+          type: string
+          enum: [pending, processing, completed, paused, failed]
+        estimatedCompletion:
+          type: string
+          format: date-time
+
+    QueueHealth:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            healthy:
+              type: boolean
+            redis:
+              type: object
+              properties:
+                connected:
+                  type: boolean
+                latency:
+                  type: integer
+            queue:
+              type: object
+              properties:
+                stats:
+                  type: object
+                activeCampaigns:
+                  type: integer
+            worker:
+              type: object
+              properties:
+                running:
+                  type: boolean
+                paused:
+                  type: boolean
+                concurrency:
+                  type: integer
+
+    Pagination:
+      type: object
+      properties:
+        page:
+          type: integer
+        limit:
+          type: integer
+        total:
+          type: integer
+        totalPages:
+          type: integer
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+        details:
+          type: array
+          items:
+            type: object
+
+  responses:
+    Unauthorized:
+      description: Authentication required
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    ValidationError:
+      description: Validation error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    RateLimited:
+      description: Too many requests
+      headers:
+        Retry-After:
+          schema:
+            type: integer
+          description: Seconds until rate limit resets
+        X-RateLimit-Limit:
+          schema:
+            type: integer
+        X-RateLimit-Remaining:
+          schema:
+            type: integer
+        X-RateLimit-Reset:
+          schema:
+            type: integer
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+              retryAfter:
+                type: integer
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: API key with bes_ prefix
+
+security:
+  - bearerAuth: []
