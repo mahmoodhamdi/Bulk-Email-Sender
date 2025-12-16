@@ -1,8 +1,20 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
+// Capture the processor function
+let capturedProcessor: ((job: unknown) => Promise<unknown>) | null = null;
+
+// Store event handlers
+const eventHandlers: Record<string, ((...args: unknown[]) => void)[]> = {};
+
 // Mock Worker from bullmq
 const mockWorker = {
-  on: vi.fn().mockReturnThis(),
+  on: vi.fn((event: string, handler: (...args: unknown[]) => void) => {
+    if (!eventHandlers[event]) {
+      eventHandlers[event] = [];
+    }
+    eventHandlers[event].push(handler);
+    return mockWorker;
+  }),
   close: vi.fn(),
   pause: vi.fn(),
   resume: vi.fn(),
@@ -12,7 +24,10 @@ const mockWorker = {
 };
 
 vi.mock('bullmq', () => ({
-  Worker: vi.fn(() => mockWorker),
+  Worker: vi.fn((queueName: string, processor: (job: unknown) => Promise<unknown>, options: unknown) => {
+    capturedProcessor = processor;
+    return mockWorker;
+  }),
 }));
 
 // Mock redis
@@ -60,6 +75,8 @@ import { Worker } from 'bullmq';
 describe('Email Worker', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    capturedProcessor = null;
+    Object.keys(eventHandlers).forEach(key => delete eventHandlers[key]);
   });
 
   afterEach(() => {
@@ -215,6 +232,137 @@ describe('Email Worker', () => {
       startEmailWorker();
       const healthy = await isWorkerHealthy();
       expect(healthy).toBe(false);
+    });
+  });
+
+  describe('Event Handlers', () => {
+    it('should handle completed event with success', async () => {
+      vi.resetModules();
+      const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+      const { startEmailWorker } = await import('@/lib/queue/email-worker');
+      startEmailWorker();
+
+      // Trigger completed event
+      if (eventHandlers['completed']) {
+        eventHandlers['completed'].forEach(handler => {
+          handler({ id: 'job-1' }, { success: true });
+        });
+      }
+
+      expect(consoleSpy).toHaveBeenCalled();
+      consoleSpy.mockRestore();
+    });
+
+    it('should handle completed event with failure', async () => {
+      vi.resetModules();
+      const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+      const { startEmailWorker } = await import('@/lib/queue/email-worker');
+      startEmailWorker();
+
+      // Trigger completed event with failure
+      if (eventHandlers['completed']) {
+        eventHandlers['completed'].forEach(handler => {
+          handler({ id: 'job-1' }, { success: false });
+        });
+      }
+
+      expect(consoleSpy).toHaveBeenCalled();
+      consoleSpy.mockRestore();
+    });
+
+    it('should handle failed event', async () => {
+      vi.resetModules();
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const { startEmailWorker } = await import('@/lib/queue/email-worker');
+      startEmailWorker();
+
+      // Trigger failed event
+      if (eventHandlers['failed']) {
+        eventHandlers['failed'].forEach(handler => {
+          handler({ id: 'job-1', attemptsMade: 3 }, new Error('Test error'));
+        });
+      }
+
+      expect(consoleSpy).toHaveBeenCalled();
+      consoleSpy.mockRestore();
+    });
+
+    it('should handle failed event with null job', async () => {
+      vi.resetModules();
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const { startEmailWorker } = await import('@/lib/queue/email-worker');
+      startEmailWorker();
+
+      // Trigger failed event with null job
+      if (eventHandlers['failed']) {
+        eventHandlers['failed'].forEach(handler => {
+          handler(null, new Error('Test error'));
+        });
+      }
+
+      expect(consoleSpy).toHaveBeenCalled();
+      consoleSpy.mockRestore();
+    });
+
+    it('should handle error event', async () => {
+      vi.resetModules();
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const { startEmailWorker } = await import('@/lib/queue/email-worker');
+      startEmailWorker();
+
+      // Trigger error event
+      if (eventHandlers['error']) {
+        eventHandlers['error'].forEach(handler => {
+          handler(new Error('Worker error'));
+        });
+      }
+
+      expect(consoleSpy).toHaveBeenCalled();
+      consoleSpy.mockRestore();
+    });
+
+    it('should handle stalled event', async () => {
+      vi.resetModules();
+      const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const { startEmailWorker } = await import('@/lib/queue/email-worker');
+      startEmailWorker();
+
+      // Trigger stalled event
+      if (eventHandlers['stalled']) {
+        eventHandlers['stalled'].forEach(handler => {
+          handler('job-123');
+        });
+      }
+
+      expect(consoleSpy).toHaveBeenCalled();
+      consoleSpy.mockRestore();
+    });
+
+    it('should handle progress event', async () => {
+      vi.resetModules();
+      const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+      const { startEmailWorker } = await import('@/lib/queue/email-worker');
+      startEmailWorker();
+
+      // Trigger progress event
+      if (eventHandlers['progress']) {
+        eventHandlers['progress'].forEach(handler => {
+          handler({ id: 'job-1' }, 50);
+        });
+      }
+
+      expect(consoleSpy).toHaveBeenCalled();
+      consoleSpy.mockRestore();
+    });
+  });
+
+  describe('processEmailJob via captured processor', () => {
+    it('should capture the processor function', async () => {
+      vi.resetModules();
+      const { startEmailWorker } = await import('@/lib/queue/email-worker');
+      startEmailWorker();
+      expect(capturedProcessor).toBeDefined();
+      expect(typeof capturedProcessor).toBe('function');
     });
   });
 });
