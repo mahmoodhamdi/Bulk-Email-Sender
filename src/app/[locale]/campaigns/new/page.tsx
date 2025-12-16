@@ -4,7 +4,7 @@ import * as React from 'react';
 import { useTranslations } from 'next-intl';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, ArrowRight, Check, Send, Palette, Code, FlaskConical, Users, List, Filter, Calendar } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Check, Send, Palette, Code, FlaskConical, Users, List, Filter, Calendar, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -18,17 +18,19 @@ import {
 import { PageLayout } from '@/components/layout/PageLayout';
 import { useCampaignStore, type CampaignDraft } from '@/stores/campaign-store';
 import { useSegmentationStore } from '@/stores/segmentation-store';
-import { useScheduleStore, formatScheduledDate, getTimeUntil } from '@/stores/schedule-store';
+import { useScheduleStore } from '@/stores/schedule-store';
 import { SegmentList } from '@/components/segmentation/SegmentList';
 import { ScheduleSelector, ScheduleSummary } from '@/components/campaign/ScheduleSelector';
 import { cn } from '@/lib/utils';
 import { sanitizeEmailPreview } from '@/lib/crypto';
+import { useCsrf } from '@/hooks/useCsrf';
 
 const STEPS = ['setup', 'content', 'recipients', 'review'] as const;
 
 export default function NewCampaignPage() {
   const t = useTranslations();
   const router = useRouter();
+  const { csrfFetch } = useCsrf();
   const {
     currentStep,
     draft,
@@ -38,18 +40,135 @@ export default function NewCampaignPage() {
     prevStep,
     setStep,
     resetDraft,
+    setError,
   } = useCampaignStore();
+  const { sendNow, getScheduledDateTimeUTC } = useScheduleStore();
+  const [isSaving, setIsSaving] = React.useState(false);
+  const [isSending, setIsSending] = React.useState(false);
 
-  const handleSaveDraft = () => {
-    // TODO: Save to database
-    alert(t('campaign.actions.saveDraft') + ' - ' + draft.name);
+  const handleSaveDraft = async () => {
+    setIsSaving(true);
+    try {
+      // Create campaign
+      const campaignResponse = await csrfFetch('/api/campaigns', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: draft.name,
+          subject: draft.subject,
+          fromName: draft.fromName,
+          fromEmail: draft.fromEmail,
+          replyTo: draft.replyTo || null,
+          content: draft.content,
+          contentType: 'html',
+          templateId: draft.templateId,
+        }),
+      });
+
+      const campaignData = await campaignResponse.json();
+
+      if (!campaignResponse.ok) {
+        throw new Error(campaignData.error || 'Failed to save campaign');
+      }
+
+      // Add recipients if any
+      if (draft.recipients.length > 0 || draft.listIds.length > 0) {
+        const recipientsResponse = await csrfFetch(
+          `/api/campaigns/${campaignData.data.id}/recipients`,
+          {
+            method: 'POST',
+            body: JSON.stringify({
+              emails: draft.recipients,
+              listIds: draft.listIds.length > 0 ? draft.listIds : undefined,
+            }),
+          }
+        );
+
+        if (!recipientsResponse.ok) {
+          const recipientError = await recipientsResponse.json();
+          console.error('Failed to add recipients:', recipientError);
+        }
+      }
+
+      alert(t('campaign.actions.draftSaved'));
+      router.push('/campaigns');
+    } catch (error) {
+      console.error('Error saving draft:', error);
+      setError('general', error instanceof Error ? error.message : 'Failed to save draft');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
-  const handleSendCampaign = () => {
-    // TODO: Send campaign
-    alert(t('campaign.review.sent'));
-    resetDraft();
-    router.push('/campaigns');
+  const handleSendCampaign = async () => {
+    setIsSending(true);
+    const scheduledDateTime = getScheduledDateTimeUTC();
+    try {
+      // First create the campaign
+      const campaignResponse = await csrfFetch('/api/campaigns', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: draft.name,
+          subject: draft.subject,
+          fromName: draft.fromName,
+          fromEmail: draft.fromEmail,
+          replyTo: draft.replyTo || null,
+          content: draft.content,
+          contentType: 'html',
+          templateId: draft.templateId,
+          scheduledAt: !sendNow && scheduledDateTime ? scheduledDateTime.toISOString() : null,
+        }),
+      });
+
+      const campaignData = await campaignResponse.json();
+
+      if (!campaignResponse.ok) {
+        throw new Error(campaignData.error || 'Failed to create campaign');
+      }
+
+      const campaignId = campaignData.data.id;
+
+      // Add recipients
+      if (draft.recipients.length > 0 || draft.listIds.length > 0) {
+        const recipientsResponse = await csrfFetch(
+          `/api/campaigns/${campaignId}/recipients`,
+          {
+            method: 'POST',
+            body: JSON.stringify({
+              emails: draft.recipients,
+              listIds: draft.listIds.length > 0 ? draft.listIds : undefined,
+            }),
+          }
+        );
+
+        if (!recipientsResponse.ok) {
+          const recipientError = await recipientsResponse.json();
+          throw new Error(recipientError.error || 'Failed to add recipients');
+        }
+      }
+
+      // Send the campaign (or schedule it)
+      const sendResponse = await csrfFetch(`/api/campaigns/${campaignId}/send`, {
+        method: 'POST',
+        body: JSON.stringify({
+          scheduledAt: !sendNow && scheduledDateTime ? scheduledDateTime.toISOString() : undefined,
+        }),
+      });
+
+      const sendData = await sendResponse.json();
+
+      if (!sendResponse.ok) {
+        throw new Error(sendData.error || 'Failed to send campaign');
+      }
+
+      alert(sendNow ? t('campaign.review.sent') : t('campaign.review.scheduled'));
+      resetDraft();
+      router.push('/campaigns');
+    } catch (error) {
+      console.error('Error sending campaign:', error);
+      setError('general', error instanceof Error ? error.message : 'Failed to send campaign');
+    } finally {
+      setIsSending(false);
+    }
   };
 
   return (
@@ -132,29 +251,52 @@ export default function NewCampaignPage() {
         )}
         {currentStep === 3 && <ReviewStep draft={draft} t={t} />}
 
+        {/* Error Display */}
+        {errors.general && (
+          <div className="mt-4 rounded-md bg-red-50 border border-red-200 p-4 text-sm text-red-600">
+            {errors.general}
+          </div>
+        )}
+
         {/* Navigation Buttons */}
         <div className="mt-6 flex justify-between gap-4">
           <div>
             {currentStep > 0 && (
-              <Button variant="outline" onClick={prevStep}>
+              <Button variant="outline" onClick={prevStep} disabled={isSaving || isSending}>
                 <ArrowLeft className="mr-2 h-4 w-4" />
                 {t('common.previous')}
               </Button>
             )}
           </div>
           <div className="flex gap-2">
-            <Button variant="outline" onClick={handleSaveDraft}>
-              {t('campaign.actions.saveDraft')}
+            <Button variant="outline" onClick={handleSaveDraft} disabled={isSaving || isSending}>
+              {isSaving ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  {t('common.saving')}
+                </>
+              ) : (
+                t('campaign.actions.saveDraft')
+              )}
             </Button>
             {currentStep < STEPS.length - 1 ? (
-              <Button onClick={nextStep}>
+              <Button onClick={nextStep} disabled={isSaving || isSending}>
                 {t('common.next')}
                 <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
             ) : (
-              <Button onClick={handleSendCampaign}>
-                <Send className="mr-2 h-4 w-4" />
-                {t('campaign.actions.send')}
+              <Button onClick={handleSendCampaign} disabled={isSaving || isSending}>
+                {isSending ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    {t('common.sending')}
+                  </>
+                ) : (
+                  <>
+                    <Send className="mr-2 h-4 w-4" />
+                    {t('campaign.actions.send')}
+                  </>
+                )}
               </Button>
             )}
           </div>

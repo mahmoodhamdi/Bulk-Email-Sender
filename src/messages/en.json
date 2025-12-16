@@ -314,6 +314,7 @@
     },
     "actions": {
       "saveDraft": "Save Draft",
+      "draftSaved": "Draft saved successfully!",
       "preview": "Preview",
       "sendTest": "Send Test",
       "send": "Send Campaign",
