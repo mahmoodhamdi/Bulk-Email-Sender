@@ -35,6 +35,7 @@ model User {
   smtpConfigs   SmtpConfig[]
   webhooks      Webhook[]
   abTests       ABTest[]
+  automations   Automation[]
 
   @@index([email])
   @@index([role])
@@ -608,4 +609,154 @@ enum WinnerCriteria {
   OPEN_RATE
   CLICK_RATE
   CONVERSION_RATE
+}
+
+// ==================== Automation Models ====================
+
+model Automation {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+
+  // Trigger configuration
+  triggerType   AutomationTriggerType
+  triggerConfig Json?   // Additional trigger configuration
+
+  // Status
+  status      AutomationStatus @default(DRAFT)
+
+  // Owner
+  userId      String?
+  user        User?    @relation(fields: [userId], references: [id])
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  steps       AutomationStep[]
+  enrollments AutomationEnrollment[]
+
+  @@unique([name, userId])
+  @@index([userId])
+  @@index([status])
+  @@index([triggerType])
+}
+
+model AutomationStep {
+  id           String   @id @default(cuid())
+  automationId String
+  automation   Automation @relation(fields: [automationId], references: [id], onDelete: Cascade)
+
+  stepType    AutomationStepType
+  name        String
+  config      Json     // Step-specific configuration
+
+  // Connections
+  nextStepId  String?  // For sequential steps
+  trueStepId  String?  // For condition true branch
+  falseStepId String?  // For condition false branch
+
+  // Visual position
+  positionX   Int @default(0)
+  positionY   Int @default(0)
+
+  // Order
+  sortOrder   Int @default(0)
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  executions  AutomationStepExecution[]
+
+  @@index([automationId])
+}
+
+model AutomationEnrollment {
+  id           String   @id @default(cuid())
+  automationId String
+  automation   Automation @relation(fields: [automationId], references: [id], onDelete: Cascade)
+  contactId    String
+
+  status       EnrollmentStatus @default(ACTIVE)
+  currentStepId String?
+
+  // Tracking
+  startedAt    DateTime @default(now())
+  completedAt  DateTime?
+  exitedAt     DateTime?
+  exitReason   String?
+
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  stepExecutions AutomationStepExecution[]
+
+  @@unique([automationId, contactId])
+  @@index([automationId])
+  @@index([contactId])
+  @@index([status])
+}
+
+model AutomationStepExecution {
+  id           String   @id @default(cuid())
+  enrollmentId String
+  enrollment   AutomationEnrollment @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+  stepId       String
+  step         AutomationStep @relation(fields: [stepId], references: [id], onDelete: Cascade)
+
+  status       StepExecutionStatus @default(PENDING)
+  result       Json?    // Execution result data
+
+  // Timing
+  scheduledAt  DateTime?
+  startedAt    DateTime?
+  completedAt  DateTime?
+  error        String?
+
+  createdAt    DateTime @default(now())
+
+  @@index([enrollmentId])
+  @@index([stepId])
+  @@index([status])
+  @@index([scheduledAt])
+}
+
+enum AutomationTriggerType {
+  SIGNUP          // When a contact signs up
+  TAG_ADDED       // When a tag is added to contact
+  DATE_FIELD      // Based on a date field (e.g., birthday)
+  MANUAL          // Manual trigger
+  EMAIL_OPENED    // When an email is opened
+  LINK_CLICKED    // When a link is clicked
+  FORM_SUBMITTED  // When a form is submitted
+}
+
+enum AutomationStatus {
+  DRAFT
+  ACTIVE
+  PAUSED
+  ARCHIVED
+}
+
+enum AutomationStepType {
+  EMAIL      // Send an email
+  DELAY      // Wait for a period
+  CONDITION  // If/else branch
+  ACTION     // Perform an action (tag, update field, etc.)
+  WEBHOOK    // Call external webhook
+}
+
+enum EnrollmentStatus {
+  ACTIVE     // Currently in automation
+  COMPLETED  // Finished all steps
+  EXITED     // Exited early (manual or condition)
+  FAILED     // Failed due to error
+}
+
+enum StepExecutionStatus {
+  PENDING
+  SCHEDULED
+  RUNNING
+  COMPLETED
+  FAILED
+  SKIPPED
 }
