@@ -114,7 +114,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       message: 'API key updated successfully',
       data: updatedKey,
     });
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('API key update error:', error);
     return NextResponse.json(
       { error: 'Internal server error' },
@@ -156,7 +156,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       success: true,
       message: 'API key deleted successfully',
     });
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('API key deletion error:', error);
     return NextResponse.json(
       { error: 'Internal server error' },

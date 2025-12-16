@@ -42,7 +42,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     }
 
     return NextResponse.json({ data: automation });
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Error getting automation:', error);
     return NextResponse.json(
       { error: 'Internal server error' },
@@ -96,7 +96,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
         return NextResponse.json({ data: result });
       }
     }
-  } catch (error) {
+  } catch (error: unknown) {
     if (error instanceof ZodError) {
       return NextResponse.json(
         { error: 'Validation error', details: error.errors },
@@ -159,7 +159,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       { message: 'Automation deleted successfully' },
       { status: 200 }
     );
-  } catch (error) {
+  } catch (error: unknown) {
     if (error instanceof Error && error.message === 'Automation not found') {
       return NextResponse.json(
         { error: 'Automation not found' },

@@ -61,7 +61,7 @@ export async function POST(request: NextRequest) {
         failureCount: result.failureCount,
       },
     });
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Topic subscription error:', error);
     return NextResponse.json(
       { error: 'Failed to subscribe to topic' },
@@ -127,7 +127,7 @@ export async function DELETE(request: NextRequest) {
         failureCount: result.failureCount,
       },
     });
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Topic unsubscription error:', error);
     return NextResponse.json(
       { error: 'Failed to unsubscribe from topic' },

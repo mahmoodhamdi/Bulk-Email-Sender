@@ -57,7 +57,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         stats,
       },
     });
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Error getting webhook:', error);
     return NextResponse.json(
       { error: 'Internal server error' },
@@ -122,7 +122,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     };
 
     return NextResponse.json({ data: sanitizedWebhook });
-  } catch (error) {
+  } catch (error: unknown) {
     if (error instanceof ZodError) {
       return NextResponse.json(
         { error: 'Validation error', details: error.errors },
@@ -187,7 +187,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       { message: 'Webhook deleted successfully' },
       { status: 200 }
     );
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Error deleting webhook:', error);
     return NextResponse.json(
       { error: 'Internal server error' },

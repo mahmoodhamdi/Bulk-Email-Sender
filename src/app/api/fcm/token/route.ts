@@ -54,7 +54,7 @@ export async function POST(request: NextRequest) {
         platform: fcmToken.platform,
       },
     });
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('FCM token registration error:', error);
     return NextResponse.json(
       { error: 'Internal server error' },
@@ -99,7 +99,7 @@ export async function DELETE(request: NextRequest) {
       success: true,
       message: 'FCM token unregistered successfully',
     });
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('FCM token unregister error:', error);
     return NextResponse.json(
       { error: 'Internal server error' },
@@ -136,7 +136,7 @@ export async function GET() {
     });
 
     return NextResponse.json({ data: tokens });
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('FCM token list error:', error);
     return NextResponse.json(
       { error: 'Internal server error' },

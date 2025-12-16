@@ -140,7 +140,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
       queuedCount: result.queuedCount,
       totalRecipients: campaign._count.recipients,
     });
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Campaign send error:', error);
     return NextResponse.json(
       { error: 'Internal server error' },
@@ -274,7 +274,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
           { status: 400 }
         );
     }
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Campaign action error:', error);
     return NextResponse.json(
       { error: 'Internal server error' },

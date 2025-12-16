@@ -61,7 +61,7 @@ export async function GET(request: NextRequest) {
         totalPages: Math.ceil(total / validated.limit),
       },
     });
-  } catch (error) {
+  } catch (error: unknown) {
     if (error instanceof ZodError) {
       return NextResponse.json(
         { error: 'Validation error', details: error.errors },
@@ -132,7 +132,7 @@ export async function POST(request: NextRequest) {
     };
 
     return NextResponse.json({ data: sanitizedWebhook }, { status: 201 });
-  } catch (error) {
+  } catch (error: unknown) {
     if (error instanceof ZodError) {
       return NextResponse.json(
         { error: 'Validation error', details: error.errors },

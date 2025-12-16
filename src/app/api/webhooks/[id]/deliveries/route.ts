@@ -73,7 +73,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         totalPages: Math.ceil(total / validated.limit),
       },
     });
-  } catch (error) {
+  } catch (error: unknown) {
     if (error instanceof ZodError) {
       return NextResponse.json(
         { error: 'Validation error', details: error.errors },
@@ -140,7 +140,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       data: delivery,
       message: 'Delivery retry queued successfully',
     });
-  } catch (error) {
+  } catch (error: unknown) {
     if (error instanceof Error && error.message.includes('only retry failed')) {
       return NextResponse.json(
         { error: 'Can only retry failed deliveries' },

@@ -59,7 +59,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     }
 
     return NextResponse.json({ data: template });
-  } catch (error) {
+  } catch (error: unknown) {
     if (error instanceof ZodError) {
       return NextResponse.json(
         { error: 'Validation error', details: error.errors },
@@ -178,7 +178,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     await createVersion(id, oldData, newData, existing.userId ?? undefined);
 
     return NextResponse.json({ data: template });
-  } catch (error) {
+  } catch (error: unknown) {
     if (error instanceof ZodError) {
       return NextResponse.json(
         { error: 'Validation error', details: error.errors },
@@ -251,7 +251,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     });
 
     return NextResponse.json({ success: true }, { status: 200 });
-  } catch (error) {
+  } catch (error: unknown) {
     if (error instanceof ZodError) {
       return NextResponse.json(
         { error: 'Validation error', details: error.errors },
@@ -336,7 +336,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     }, template.userId ?? undefined);
 
     return NextResponse.json({ data: template }, { status: 201 });
-  } catch (error) {
+  } catch (error: unknown) {
     if (error instanceof ZodError) {
       return NextResponse.json(
         { error: 'Validation error', details: error.errors },

@@ -44,7 +44,7 @@ export async function GET(request: NextRequest) {
         totalPages: Math.ceil(total / limit),
       },
     });
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Error listing A/B tests:', error);
     return NextResponse.json(
       { error: 'Internal server error' },
@@ -77,7 +77,7 @@ export async function POST(request: NextRequest) {
     const abTest = await createABTest(validated);
 
     return NextResponse.json({ data: abTest }, { status: 201 });
-  } catch (error) {
+  } catch (error: unknown) {
     if (error instanceof ZodError) {
       return NextResponse.json(
         { error: 'Validation error', details: error.errors },

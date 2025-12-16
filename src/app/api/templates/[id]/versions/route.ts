@@ -68,7 +68,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         totalPages: result.totalPages,
       },
     });
-  } catch (error) {
+  } catch (error: unknown) {
     if (error instanceof ZodError) {
       return NextResponse.json(
         { error: 'Validation error', details: error.errors },

@@ -39,7 +39,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     return NextResponse.json({
       data: result,
     });
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Error testing webhook:', error);
     return NextResponse.json(
       { error: 'Internal server error' },

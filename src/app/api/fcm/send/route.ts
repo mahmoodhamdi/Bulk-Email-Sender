@@ -159,7 +159,7 @@ export async function POST(request: NextRequest) {
       success: result.success,
       data: result,
     });
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Send notification error:', error);
     return NextResponse.json(
       { error: 'Failed to send notification' },

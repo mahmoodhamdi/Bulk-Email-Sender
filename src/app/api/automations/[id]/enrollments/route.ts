@@ -50,7 +50,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         totalPages: Math.ceil(total / limit),
       },
     });
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Error listing enrollments:', error);
     return NextResponse.json(
       { error: 'Internal server error' },
@@ -85,7 +85,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     const enrollment = await enrollContact(id, validated.contactId, validated.startStepId);
 
     return NextResponse.json({ data: enrollment }, { status: 201 });
-  } catch (error) {
+  } catch (error: unknown) {
     if (error instanceof ZodError) {
       return NextResponse.json(
         { error: 'Validation error', details: error.errors },

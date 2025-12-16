@@ -37,7 +37,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     const step = await addStep(id, validated);
 
     return NextResponse.json({ data: step }, { status: 201 });
-  } catch (error) {
+  } catch (error: unknown) {
     if (error instanceof ZodError) {
       return NextResponse.json(
         { error: 'Validation error', details: error.errors },
@@ -101,7 +101,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     const steps = await reorderSteps(id, validated.stepIds);
 
     return NextResponse.json({ data: steps });
-  } catch (error) {
+  } catch (error: unknown) {
     if (error instanceof ZodError) {
       return NextResponse.json(
         { error: 'Validation error', details: error.errors },

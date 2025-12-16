@@ -37,7 +37,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     }
 
     return NextResponse.json({ data: enrollment });
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Error getting enrollment:', error);
     return NextResponse.json(
       { error: 'Internal server error' },
@@ -81,7 +81,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       { error: 'Invalid action' },
       { status: 400 }
     );
-  } catch (error) {
+  } catch (error: unknown) {
     if (error instanceof ZodError) {
       return NextResponse.json(
         { error: 'Validation error', details: error.errors },

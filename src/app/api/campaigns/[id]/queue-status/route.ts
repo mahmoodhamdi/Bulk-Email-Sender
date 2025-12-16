@@ -127,7 +127,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
         },
       },
     });
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Queue status error:', error);
     return NextResponse.json(
       { error: 'Internal server error' },

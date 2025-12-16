@@ -53,7 +53,7 @@ export async function GET(request: NextRequest) {
         },
       },
     });
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Queue health check error:', error);
     return NextResponse.json(
       { error: 'Internal server error' },
@@ -134,7 +134,7 @@ export async function POST(request: NextRequest) {
           { status: 400 }
         );
     }
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Queue control error:', error);
     return NextResponse.json(
       { error: 'Internal server error' },

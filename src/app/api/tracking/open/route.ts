@@ -107,7 +107,7 @@ export async function GET(request: NextRequest) {
         'Expires': '0',
       },
     });
-  } catch (error) {
+  } catch (error: unknown) {
     // Always return the tracking pixel even on error
     // to avoid breaking email rendering
     if (error instanceof ZodError) {

@@ -44,7 +44,7 @@ export async function GET(request: NextRequest) {
         totalPages: Math.ceil(total / limit),
       },
     });
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Error listing automations:', error);
     return NextResponse.json(
       { error: 'Internal server error' },
@@ -77,7 +77,7 @@ export async function POST(request: NextRequest) {
     const automation = await createAutomation(validated);
 
     return NextResponse.json({ data: automation }, { status: 201 });
-  } catch (error) {
+  } catch (error: unknown) {
     if (error instanceof ZodError) {
       return NextResponse.json(
         { error: 'Validation error', details: error.errors },
