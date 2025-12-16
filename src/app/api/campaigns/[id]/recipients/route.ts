@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
-import { campaignIdSchema } from '@/lib/validations/campaign';
+import { campaignIdSchema, addRecipientsSchema } from '@/lib/validations/campaign';
 import { apiRateLimiter } from '@/lib/rate-limit';
+import { generateShortId } from '@/lib/crypto';
 import { ZodError, z } from 'zod';
 
 interface RouteParams {
@@ -173,6 +174,149 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       );
     }
     console.error('Error listing recipients:', error);
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    );
+  }
+}
+
+/**
+ * POST /api/campaigns/[id]/recipients
+ * Add recipients to a campaign
+ *
+ * Request body:
+ * {
+ *   emails: string[],    // Array of email addresses
+ *   listIds?: string[]   // Optional: Import from contact lists
+ * }
+ */
+export async function POST(request: NextRequest, { params }: RouteParams) {
+  try {
+    const { id } = await params;
+
+    // Rate limiting
+    const rateLimitResult = apiRateLimiter.check(`recipients-add-${id}`);
+    if (!rateLimitResult.success) {
+      const retryAfter = Math.ceil((rateLimitResult.resetAt - Date.now()) / 1000);
+      return NextResponse.json(
+        { error: 'Too many requests', retryAfter },
+        { status: 429 }
+      );
+    }
+
+    // Validate campaign ID
+    campaignIdSchema.parse({ id });
+
+    // Verify campaign exists and is in DRAFT status
+    const campaign = await prisma.campaign.findUnique({
+      where: { id },
+      select: { id: true, status: true },
+    });
+
+    if (!campaign) {
+      return NextResponse.json(
+        { error: 'Campaign not found' },
+        { status: 404 }
+      );
+    }
+
+    if (campaign.status !== 'DRAFT' && campaign.status !== 'SCHEDULED') {
+      return NextResponse.json(
+        { error: 'Can only add recipients to draft or scheduled campaigns' },
+        { status: 400 }
+      );
+    }
+
+    // Parse and validate body
+    const body = await request.json();
+    const validated = addRecipientsSchema.parse(body);
+
+    const { emails, listIds } = validated;
+
+    // Collect all emails to add
+    let allEmails = [...emails];
+
+    // If listIds provided, get emails from contact lists
+    if (listIds && listIds.length > 0) {
+      const contacts = await prisma.contact.findMany({
+        where: {
+          status: 'ACTIVE',
+          listMembers: {
+            some: {
+              listId: { in: listIds },
+            },
+          },
+        },
+        select: { email: true },
+      });
+      allEmails = [...allEmails, ...contacts.map(c => c.email)];
+    }
+
+    // Remove duplicates
+    const uniqueEmails = [...new Set(allEmails.map(e => e.toLowerCase()))];
+
+    // Get existing recipient emails for this campaign
+    const existingRecipients = await prisma.recipient.findMany({
+      where: { campaignId: id },
+      select: { email: true },
+    });
+    const existingEmails = new Set(existingRecipients.map(r => r.email.toLowerCase()));
+
+    // Filter out already existing recipients
+    const newEmails = uniqueEmails.filter(email => !existingEmails.has(email));
+
+    if (newEmails.length === 0) {
+      return NextResponse.json({
+        data: {
+          added: 0,
+          skipped: uniqueEmails.length,
+          total: existingRecipients.length,
+        },
+        message: 'All recipients already exist',
+      });
+    }
+
+    // Create recipient records
+    const recipientData = newEmails.map(email => ({
+      campaignId: id,
+      email,
+      status: 'PENDING' as const,
+      trackingId: generateShortId(16),
+    }));
+
+    // Use createMany for bulk insert
+    const result = await prisma.recipient.createMany({
+      data: recipientData,
+      skipDuplicates: true,
+    });
+
+    // Get updated total count
+    const totalRecipients = await prisma.recipient.count({
+      where: { campaignId: id },
+    });
+
+    return NextResponse.json({
+      data: {
+        added: result.count,
+        skipped: uniqueEmails.length - newEmails.length,
+        total: totalRecipients,
+      },
+    }, { status: 201 });
+  } catch (error: unknown) {
+    if (error instanceof ZodError) {
+      return NextResponse.json(
+        { error: 'Validation error', details: error.errors },
+        { status: 400 }
+      );
+    }
+    if (error instanceof SyntaxError) {
+      return NextResponse.json(
+        { error: 'Invalid JSON body' },
+        { status: 400 }
+      );
+    }
+    console.error('Error adding recipients:', error);
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
