@@ -244,6 +244,19 @@ export interface TierLimits {
 }
 
 /**
+ * Feature keys that can be checked for tier access
+ */
+export type TierFeature =
+  | 'abTesting'
+  | 'automation'
+  | 'apiAccess'
+  | 'webhooks'
+  | 'customBranding'
+  | 'prioritySupport'
+  | 'dedicatedSupport'
+  | 'customIntegrations';
+
+/**
  * Tier configuration with pricing and limits
  * Prices are in cents (USD)
  */

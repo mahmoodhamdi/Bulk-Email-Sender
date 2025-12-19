@@ -375,7 +375,7 @@ describe('Usage Service', () => {
 
       expect(mockPrisma.contact.count).toHaveBeenCalledWith({
         where: {
-          lists: {
+          listMembers: {
             some: {
               list: {
                 userId: 'user-123',

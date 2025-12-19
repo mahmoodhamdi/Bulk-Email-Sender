@@ -19,6 +19,7 @@ import {
   PaymentMethodInfo,
   RefundParams,
   RefundResult,
+  WebhookResult,
   TIER_CONFIG,
 } from '../types';
 import {
@@ -42,6 +43,7 @@ import {
   PaddleSubscription,
 } from './client';
 import { prisma } from '@/lib/db/prisma';
+import { Prisma } from '@prisma/client';
 
 export class PaddleGateway implements PaymentGateway {
   readonly provider = PaymentProvider.PADDLE;
@@ -356,14 +358,17 @@ export class PaddleGateway implements PaymentGateway {
     // We track them in our database
     const subscription = await prisma.subscription.findFirst({
       where: { providerCustomerId },
-      include: { paymentMethods: true },
     });
 
     if (!subscription) {
       return [];
     }
 
-    return subscription.paymentMethods.map(pm => ({
+    const paymentMethods = await prisma.paymentMethod.findMany({
+      where: { userId: subscription.userId, provider: PaymentProvider.PADDLE },
+    });
+
+    return paymentMethods.map(pm => ({
       id: pm.id,
       userId: pm.userId,
       provider: PaymentProvider.PADDLE,
@@ -382,9 +387,40 @@ export class PaddleGateway implements PaymentGateway {
     });
   }
 
+  async setDefaultPaymentMethod(
+    providerCustomerId: string,
+    providerMethodId: string
+  ): Promise<void> {
+    const subscription = await prisma.subscription.findFirst({
+      where: { providerCustomerId },
+    });
+
+    if (!subscription) {
+      throw new Error('Customer not found');
+    }
+
+    await prisma.paymentMethod.updateMany({
+      where: { userId: subscription.userId, provider: PaymentProvider.PADDLE },
+      data: { isDefault: false },
+    });
+
+    await prisma.paymentMethod.updateMany({
+      where: { providerMethodId, provider: PaymentProvider.PADDLE },
+      data: { isDefault: true },
+    });
+  }
+
   // ===========================================
   // CUSTOMER MANAGEMENT
   // ===========================================
+
+  async getCustomerId(userId: string): Promise<string | null> {
+    const subscription = await prisma.subscription.findUnique({
+      where: { userId },
+    });
+
+    return subscription?.providerCustomerId || null;
+  }
 
   async createCustomer(
     userId: string,
@@ -467,7 +503,7 @@ export class PaddleGateway implements PaymentGateway {
         provider: PaymentProvider.PADDLE,
         eventId: payload.event_id as string,
         eventType,
-        payload: payload as Record<string, unknown>,
+        payload: payload as Prisma.InputJsonValue,
         processed: false,
       },
     });
@@ -514,6 +550,29 @@ export class PaddleGateway implements PaymentGateway {
     }
 
     return JSON.parse(payload);
+  }
+
+  async handleWebhookEvent(event: unknown): Promise<WebhookResult> {
+    const payload = event as Record<string, unknown>;
+    const eventType = payload.event_type as string;
+
+    try {
+      await this.handleWebhook(payload, '');
+
+      return {
+        received: true,
+        eventType,
+        processed: true,
+        subscriptionId: (payload.data as Record<string, unknown>)?.id as string,
+      };
+    } catch (error) {
+      return {
+        received: true,
+        eventType,
+        processed: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      };
+    }
   }
 
   // ===========================================
@@ -655,8 +714,7 @@ export class PaddleGateway implements PaymentGateway {
       const card = payments[0].method_details.card;
       await prisma.paymentMethod.upsert({
         where: {
-          userId_provider_providerMethodId: {
-            userId,
+          provider_providerMethodId: {
             provider: PaymentProvider.PADDLE,
             providerMethodId: transactionId,
           },
@@ -701,7 +759,7 @@ export class PaddleGateway implements PaymentGateway {
         status: PaymentStatus.FAILED,
         provider: PaymentProvider.PADDLE,
         providerPaymentId: transactionId,
-        failureReason: errorCode || 'Payment failed',
+        description: errorCode || 'Payment failed',
       },
     });
   }
@@ -777,7 +835,7 @@ export class PaddleGateway implements PaymentGateway {
       case 'ready':
         return PaymentStatus.PROCESSING;
       case 'canceled':
-        return PaymentStatus.CANCELED;
+        return PaymentStatus.FAILED;
       case 'past_due':
         return PaymentStatus.FAILED;
       default:

@@ -60,3 +60,7 @@ DEPLOYMENT_CREDENTIALS.template.md
 # Firebase credentials
 *-firebase-adminsdk-*.json
 firebase-service-account.json
+
+# Docker generated files
+docker/.ports
+docker/.env

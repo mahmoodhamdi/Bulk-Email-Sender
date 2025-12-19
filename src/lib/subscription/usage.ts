@@ -270,7 +270,7 @@ export async function resetMonthlyUsage(userId: string): Promise<void> {
 export async function syncContactCount(userId: string): Promise<void> {
   const contactCount = await prisma.contact.count({
     where: {
-      lists: {
+      listMembers: {
         some: {
           list: {
             userId,

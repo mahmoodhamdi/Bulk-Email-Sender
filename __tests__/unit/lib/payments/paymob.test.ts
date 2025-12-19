@@ -32,6 +32,7 @@ const mockPrisma = {
     update: vi.fn(),
   },
   paymentMethod: {
+    findMany: vi.fn(),
     upsert: vi.fn(),
     delete: vi.fn(),
   },
@@ -440,21 +441,23 @@ describe('Paymob Gateway', () => {
       const gateway = new PaymobGateway();
 
       mockPrisma.subscription.findFirst.mockResolvedValue({
+        userId: 'user123',
         providerCustomerId: 'paymob_user123',
-        paymentMethods: [
-          {
-            id: 'pm_123',
-            userId: 'user123',
-            provider: 'PAYMOB',
-            type: 'CARD',
-            isDefault: true,
-            cardBrand: 'visa',
-            cardLast4: '4242',
-            cardExpMonth: 12,
-            cardExpYear: 2025,
-          },
-        ],
       });
+
+      mockPrisma.paymentMethod.findMany.mockResolvedValue([
+        {
+          id: 'pm_123',
+          userId: 'user123',
+          provider: 'PAYMOB',
+          type: 'CARD',
+          isDefault: true,
+          cardBrand: 'visa',
+          cardLast4: '4242',
+          cardExpMonth: 12,
+          cardExpYear: 2025,
+        },
+      ]);
 
       const methods = await gateway.listPaymentMethods('paymob_user123');
 

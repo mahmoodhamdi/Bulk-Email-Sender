@@ -5,6 +5,7 @@
 
 import Stripe from 'stripe';
 import { prisma } from '@/lib/db/prisma';
+import { Prisma } from '@prisma/client';
 import {
   PaymentGateway,
   PaymentProvider,
@@ -410,7 +411,7 @@ export class StripeGateway implements PaymentGateway {
           provider: PaymentProvider.STRIPE,
           eventType: stripeEvent.type,
           eventId: stripeEvent.id,
-          payload: stripeEvent as unknown as Record<string, unknown>,
+          payload: stripeEvent as unknown as Prisma.InputJsonValue,
           processed: true,
           processedAt: new Date(),
         },
@@ -430,7 +431,7 @@ export class StripeGateway implements PaymentGateway {
           provider: PaymentProvider.STRIPE,
           eventType: stripeEvent.type,
           eventId: stripeEvent.id,
-          payload: stripeEvent as unknown as Record<string, unknown>,
+          payload: stripeEvent as unknown as Prisma.InputJsonValue,
           processed: false,
           error: error instanceof Error ? error.message : 'Unknown error',
         },
@@ -544,6 +545,11 @@ export class StripeGateway implements PaymentGateway {
     userId: string
   ): SubscriptionInfo {
     const tier = (subscription.metadata?.tier as SubscriptionTier) || SubscriptionTier.FREE;
+    // Cast to access properties that may not be in TypeScript definitions
+    const sub = subscription as Stripe.Subscription & {
+      current_period_start?: number;
+      current_period_end?: number;
+    };
 
     return {
       id: subscription.id,
@@ -552,8 +558,12 @@ export class StripeGateway implements PaymentGateway {
       status: this.mapStripeStatus(subscription.status),
       provider: PaymentProvider.STRIPE,
       providerSubscriptionId: subscription.id,
-      currentPeriodStart: new Date(subscription.current_period_start * 1000),
-      currentPeriodEnd: new Date(subscription.current_period_end * 1000),
+      currentPeriodStart: sub.current_period_start
+        ? new Date(sub.current_period_start * 1000)
+        : new Date(),
+      currentPeriodEnd: sub.current_period_end
+        ? new Date(sub.current_period_end * 1000)
+        : new Date(),
       cancelAtPeriodEnd: subscription.cancel_at_period_end,
       trialEnd: subscription.trial_end
         ? new Date(subscription.trial_end * 1000)
@@ -645,6 +655,11 @@ export class StripeGateway implements PaymentGateway {
 
     const tier = (subscription.metadata?.tier as SubscriptionTier) || SubscriptionTier.FREE;
     const tierConfig = TIER_CONFIG[tier];
+    // Cast to access properties that may not be in TypeScript definitions
+    const sub = subscription as Stripe.Subscription & {
+      current_period_start?: number;
+      current_period_end?: number;
+    };
 
     await prisma.subscription.upsert({
       where: { userId },
@@ -656,8 +671,12 @@ export class StripeGateway implements PaymentGateway {
         providerSubscriptionId: subscription.id,
         providerCustomerId: customer.id,
         providerPriceId: subscription.items.data[0]?.price.id,
-        currentPeriodStart: new Date(subscription.current_period_start * 1000),
-        currentPeriodEnd: new Date(subscription.current_period_end * 1000),
+        currentPeriodStart: sub.current_period_start
+          ? new Date(sub.current_period_start * 1000)
+          : new Date(),
+        currentPeriodEnd: sub.current_period_end
+          ? new Date(sub.current_period_end * 1000)
+          : new Date(),
         cancelAtPeriodEnd: subscription.cancel_at_period_end,
         trialStart: subscription.trial_start
           ? new Date(subscription.trial_start * 1000)
@@ -673,8 +692,12 @@ export class StripeGateway implements PaymentGateway {
         status: this.mapStripeStatus(subscription.status),
         providerSubscriptionId: subscription.id,
         providerPriceId: subscription.items.data[0]?.price.id,
-        currentPeriodStart: new Date(subscription.current_period_start * 1000),
-        currentPeriodEnd: new Date(subscription.current_period_end * 1000),
+        currentPeriodStart: sub.current_period_start
+          ? new Date(sub.current_period_start * 1000)
+          : new Date(),
+        currentPeriodEnd: sub.current_period_end
+          ? new Date(sub.current_period_end * 1000)
+          : new Date(),
         cancelAtPeriodEnd: subscription.cancel_at_period_end,
         canceledAt: subscription.canceled_at
           ? new Date(subscription.canceled_at * 1000)
@@ -722,7 +745,9 @@ export class StripeGateway implements PaymentGateway {
   private async handleInvoicePaymentSucceeded(
     invoice: Stripe.Invoice
   ): Promise<void> {
-    if (!invoice.subscription || !invoice.customer) {
+    // Access subscription through parent in newer API
+    const subscriptionId = invoice.parent?.subscription_details?.subscription;
+    if (!subscriptionId || !invoice.customer) {
       return;
     }
 
@@ -735,19 +760,29 @@ export class StripeGateway implements PaymentGateway {
       return;
     }
 
+    // Cast to access properties that may not be in TypeScript definitions
+    const inv = invoice as unknown as {
+      amount_paid: number;
+      currency: string;
+      id: string;
+      lines: { data: Array<{ description?: string }> };
+      hosted_invoice_url?: string;
+      number?: string;
+    };
+
     // Create payment record
     await prisma.payment.create({
       data: {
         userId,
-        amount: invoice.amount_paid,
-        currency: invoice.currency.toUpperCase(),
+        amount: inv.amount_paid,
+        currency: inv.currency.toUpperCase(),
         status: PaymentStatus.COMPLETED,
         provider: PaymentProvider.STRIPE,
-        providerPaymentId: invoice.payment_intent as string,
+        providerPaymentId: inv.id,
         paymentMethodType: 'card',
-        description: `Subscription payment - ${invoice.lines.data[0]?.description || 'Monthly'}`,
-        receiptUrl: invoice.hosted_invoice_url || undefined,
-        receiptNumber: invoice.number || undefined,
+        description: `Subscription payment - ${inv.lines.data[0]?.description || 'Monthly'}`,
+        receiptUrl: inv.hosted_invoice_url || undefined,
+        receiptNumber: inv.number || undefined,
       },
     });
 
@@ -764,7 +799,9 @@ export class StripeGateway implements PaymentGateway {
   private async handleInvoicePaymentFailed(
     invoice: Stripe.Invoice
   ): Promise<void> {
-    if (!invoice.subscription || !invoice.customer) {
+    // Access subscription through parent in newer API
+    const subscriptionId = invoice.parent?.subscription_details?.subscription;
+    if (!subscriptionId || !invoice.customer) {
       return;
     }
 
@@ -777,18 +814,24 @@ export class StripeGateway implements PaymentGateway {
       return;
     }
 
+    // Cast to access properties that may not be in TypeScript definitions
+    const inv = invoice as unknown as {
+      amount_due: number;
+      currency: string;
+      id: string;
+    };
+
     // Create failed payment record
     await prisma.payment.create({
       data: {
         userId,
-        amount: invoice.amount_due,
-        currency: invoice.currency.toUpperCase(),
+        amount: inv.amount_due,
+        currency: inv.currency.toUpperCase(),
         status: PaymentStatus.FAILED,
         provider: PaymentProvider.STRIPE,
-        providerPaymentId: invoice.payment_intent as string,
+        providerPaymentId: inv.id,
         paymentMethodType: 'card',
         description: `Failed subscription payment`,
-        failureMessage: 'Payment failed',
       },
     });
 

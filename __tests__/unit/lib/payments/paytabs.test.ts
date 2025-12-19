@@ -29,6 +29,7 @@ const mockPrisma = {
   },
   paymentMethod: {
     findUnique: vi.fn(),
+    findMany: vi.fn(),
     upsert: vi.fn(),
     delete: vi.fn(),
   },
@@ -308,21 +309,23 @@ describe('PayTabs Gateway', () => {
       const gateway = new PayTabsGateway();
 
       mockPrisma.subscription.findFirst.mockResolvedValue({
+        userId: 'user123',
         providerCustomerId: 'paytabs_user123',
-        paymentMethods: [
-          {
-            id: 'pm_123',
-            userId: 'user123',
-            provider: 'PAYTABS',
-            type: 'CARD',
-            isDefault: true,
-            cardBrand: 'Visa',
-            cardLast4: '4242',
-            cardExpMonth: 12,
-            cardExpYear: 2025,
-          },
-        ],
       });
+
+      mockPrisma.paymentMethod.findMany.mockResolvedValue([
+        {
+          id: 'pm_123',
+          userId: 'user123',
+          provider: 'PAYTABS',
+          type: 'CARD',
+          isDefault: true,
+          cardBrand: 'Visa',
+          cardLast4: '4242',
+          cardExpMonth: 12,
+          cardExpYear: 2025,
+        },
+      ]);
 
       const methods = await gateway.listPaymentMethods('paytabs_user123');
 
@@ -572,7 +575,7 @@ describe('PayTabs Gateway', () => {
           userId: 'user123',
           status: PaymentStatus.FAILED,
           provider: PaymentProvider.PAYTABS,
-          failureReason: 'Declined',
+          description: 'Declined',
         }),
       });
 

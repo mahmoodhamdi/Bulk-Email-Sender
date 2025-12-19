@@ -75,11 +75,15 @@ export async function getAuthToken(): Promise<string> {
   }
 
   const data = await response.json();
-  cachedToken = data.token;
+  const token = data.token as string;
+  if (!token) {
+    throw new Error('Paymob authentication failed: No token received');
+  }
+  cachedToken = token;
   // Token expires in 1 hour, cache for 55 minutes
   tokenExpiresAt = Date.now() + 55 * 60 * 1000;
 
-  return cachedToken;
+  return token;
 }
 
 /**

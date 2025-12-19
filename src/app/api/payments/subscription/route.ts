@@ -250,7 +250,7 @@ export async function DELETE(request: NextRequest) {
     }
 
     // Parse and validate request body (optional)
-    let validated = { immediately: false, reason: undefined as string | undefined };
+    let validated: { immediately: boolean; reason?: string } = { immediately: false };
     try {
       const body = await request.json();
       validated = cancelSubscriptionSchema.parse(body);
