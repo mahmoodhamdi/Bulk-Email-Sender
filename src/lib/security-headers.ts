@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server';
-import crypto from 'crypto';
 
 // Security headers to add to all responses
 export const SECURITY_HEADERS: Record<string, string> = {
@@ -13,9 +12,12 @@ export const SECURITY_HEADERS: Record<string, string> = {
 
 /**
  * Generate a cryptographic nonce for CSP
+ * Uses Web Crypto API for Edge Runtime compatibility
  */
 export function generateNonce(): string {
-  return crypto.randomBytes(16).toString('base64');
+  const bytes = new Uint8Array(16);
+  crypto.getRandomValues(bytes);
+  return btoa(String.fromCharCode(...bytes));
 }
 
 /**
