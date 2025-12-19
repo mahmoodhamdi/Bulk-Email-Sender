@@ -54,6 +54,8 @@ tags:
     description: Outbound webhook management
   - name: A/B Tests
     description: A/B testing management
+  - name: Payments
+    description: Subscription and payment management
   - name: Authentication
     description: User authentication and API keys
   - name: Admin
@@ -1019,6 +1021,226 @@ paths:
         '200':
           description: Service is healthy
 
+  # Payments
+  /payments/checkout:
+    post:
+      summary: Create checkout session
+      tags: [Payments]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateCheckoutRequest'
+      responses:
+        '200':
+          description: Checkout session created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  url:
+                    type: string
+                    format: uri
+                  sessionId:
+                    type: string
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /payments/portal:
+    get:
+      summary: Get customer portal URL
+      tags: [Payments]
+      responses:
+        '200':
+          description: Portal URL
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  url:
+                    type: string
+                    format: uri
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /payments/subscription:
+    get:
+      summary: Get current subscription
+      tags: [Payments]
+      responses:
+        '200':
+          description: Current subscription details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Subscription'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    patch:
+      summary: Update subscription
+      tags: [Payments]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                tier:
+                  $ref: '#/components/schemas/SubscriptionTier'
+                billingInterval:
+                  type: string
+                  enum: [monthly, yearly]
+      responses:
+        '200':
+          description: Subscription updated
+        '400':
+          $ref: '#/components/responses/ValidationError'
+
+    delete:
+      summary: Cancel subscription
+      tags: [Payments]
+      responses:
+        '200':
+          description: Subscription cancelled
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /payments/methods:
+    get:
+      summary: List payment methods
+      tags: [Payments]
+      responses:
+        '200':
+          description: List of payment methods
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PaymentMethod'
+
+    post:
+      summary: Add payment method
+      tags: [Payments]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [paymentMethodId]
+              properties:
+                paymentMethodId:
+                  type: string
+                setAsDefault:
+                  type: boolean
+                  default: false
+      responses:
+        '201':
+          description: Payment method added
+        '400':
+          $ref: '#/components/responses/ValidationError'
+
+  /payments/methods/{id}:
+    delete:
+      summary: Remove payment method
+      tags: [Payments]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Payment method removed
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /payments/invoices:
+    get:
+      summary: List invoices
+      tags: [Payments]
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: List of invoices
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Invoice'
+                  pagination:
+                    $ref: '#/components/schemas/Pagination'
+
+  # Payment Webhooks (no auth required - verified by signature)
+  /webhooks/stripe:
+    post:
+      summary: Stripe webhook handler
+      tags: [Payments]
+      description: Handles Stripe webhook events. Verified via Stripe signature.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Webhook processed
+        '400':
+          description: Invalid signature
+
+  /webhooks/paymob:
+    post:
+      summary: Paymob webhook handler
+      tags: [Payments]
+      description: Handles Paymob callback events. Verified via HMAC.
+      security: []
+      responses:
+        '200':
+          description: Webhook processed
+
+  /webhooks/paytabs:
+    post:
+      summary: PayTabs webhook handler
+      tags: [Payments]
+      description: Handles PayTabs callback events.
+      security: []
+      responses:
+        '200':
+          description: Webhook processed
+
+  /webhooks/paddle:
+    post:
+      summary: Paddle webhook handler
+      tags: [Payments]
+      description: Handles Paddle webhook events. Verified via signature.
+      security: []
+      responses:
+        '200':
+          description: Webhook processed
+
 components:
   parameters:
     CampaignId:
@@ -1330,6 +1552,154 @@ components:
           type: array
           items:
             type: object
+
+    # Payment Schemas
+    SubscriptionTier:
+      type: string
+      enum: [FREE, STARTER, PRO, ENTERPRISE]
+      description: Subscription tier level
+
+    SubscriptionStatus:
+      type: string
+      enum: [ACTIVE, PAST_DUE, CANCELED, EXPIRED, TRIALING]
+
+    PaymentProvider:
+      type: string
+      enum: [STRIPE, PAYMOB, PAYTABS, PADDLE]
+
+    PaymentStatus:
+      type: string
+      enum: [PENDING, PROCESSING, SUCCEEDED, FAILED, REFUNDED]
+
+    Subscription:
+      type: object
+      properties:
+        id:
+          type: string
+        userId:
+          type: string
+        tier:
+          $ref: '#/components/schemas/SubscriptionTier'
+        status:
+          $ref: '#/components/schemas/SubscriptionStatus'
+        provider:
+          $ref: '#/components/schemas/PaymentProvider'
+        currentPeriodStart:
+          type: string
+          format: date-time
+        currentPeriodEnd:
+          type: string
+          format: date-time
+        cancelAtPeriodEnd:
+          type: boolean
+        emailLimit:
+          type: integer
+          nullable: true
+        contactLimit:
+          type: integer
+          nullable: true
+        emailsSent:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    PaymentMethod:
+      type: object
+      properties:
+        id:
+          type: string
+        provider:
+          $ref: '#/components/schemas/PaymentProvider'
+        type:
+          type: string
+          description: "Card type (visa, mastercard, etc.)"
+        last4:
+          type: string
+        expiryMonth:
+          type: integer
+        expiryYear:
+          type: integer
+        isDefault:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+
+    Invoice:
+      type: object
+      properties:
+        id:
+          type: string
+        subscriptionId:
+          type: string
+        amount:
+          type: integer
+          description: Amount in cents
+        currency:
+          type: string
+        status:
+          $ref: '#/components/schemas/PaymentStatus'
+        pdfUrl:
+          type: string
+          format: uri
+        createdAt:
+          type: string
+          format: date-time
+        paidAt:
+          type: string
+          format: date-time
+          nullable: true
+
+    CreateCheckoutRequest:
+      type: object
+      required: [tier]
+      properties:
+        tier:
+          $ref: '#/components/schemas/SubscriptionTier'
+        provider:
+          $ref: '#/components/schemas/PaymentProvider'
+        billingInterval:
+          type: string
+          enum: [monthly, yearly]
+          default: monthly
+        successUrl:
+          type: string
+          format: uri
+        cancelUrl:
+          type: string
+          format: uri
+
+    TierLimits:
+      type: object
+      properties:
+        emailsPerMonth:
+          type: integer
+          nullable: true
+          description: "null = unlimited"
+        contacts:
+          type: integer
+          nullable: true
+        smtpConfigs:
+          type: integer
+        templates:
+          type: integer
+          nullable: true
+        abTesting:
+          type: boolean
+        automation:
+          type: boolean
+        apiAccess:
+          type: boolean
+        webhooks:
+          type: boolean
+        prioritySupport:
+          type: boolean
+        customIntegrations:
+          type: boolean
 
   responses:
     Unauthorized:
