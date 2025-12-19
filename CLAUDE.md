@@ -59,6 +59,8 @@ npm install --legacy-peer-deps
   - `src/lib/email/` - Email sending logic (sender, merge-tags, validator)
   - `src/lib/queue/` - BullMQ email queue and worker
   - `src/lib/webhook/` - Outbound webhook delivery system
+  - `src/lib/payments/` - Payment gateway integrations (Stripe, Paymob, PayTabs, Paddle)
+  - `src/lib/subscription/` - Subscription middleware and usage tracking
   - `src/lib/db/` - Database utilities (Prisma client singleton)
   - `src/lib/crypto.ts` - Secure ID generation, AES-GCM encryption, HTML/CSV escaping, DOMPurify sanitization
   - `src/lib/rate-limit.ts` - In-memory rate limiting with pre-configured limiters
@@ -73,6 +75,7 @@ npm install --legacy-peer-deps
   - `reputation/` - Deliverability metrics, bounce manager, blacklist checker
   - `preview/` - Email preview (DeviceToggle, SpamScoreCard, TestSendDialog, PersonalizationPicker)
   - `unsubscribe/` - Unsubscribe management (UnsubscribeForm, SuppressionList)
+  - `billing/` - Payment components (PricingTable, SubscriptionStatus, PaymentHistory, CheckoutButton, BillingPage)
 - `src/stores/` - Zustand stores for client-side state
 - `src/hooks/` - Custom React hooks (useCsrf, useTheme, usePagination)
 - `src/i18n/` - Internationalization config (next-intl)
@@ -85,7 +88,7 @@ npm install --legacy-peer-deps
 Use `@/*` to import from `src/*` (e.g., `import { cn } from '@/lib/utils'`)
 
 ### Database Schema (Prisma)
-Key models: User, Account, Session, VerificationToken, ApiKey, FcmToken, Campaign, Template, TemplateVersion, Contact, ContactList, ContactListMember, Recipient, EmailEvent, SmtpConfig, Unsubscribe, Webhook, WebhookDelivery.
+Key models: User, Account, Session, VerificationToken, ApiKey, FcmToken, Campaign, Template, TemplateVersion, Contact, ContactList, ContactListMember, Recipient, EmailEvent, SmtpConfig, Unsubscribe, Webhook, WebhookDelivery, Subscription, Payment, PaymentMethod, Invoice, WebhookEvent, Coupon.
 
 Enums:
 - UserRole: USER, ADMIN, SUPER_ADMIN
@@ -96,6 +99,10 @@ Enums:
 - WebhookAuthType: NONE, BASIC, BEARER, API_KEY, HMAC
 - WebhookDeliveryStatus: PENDING, PROCESSING, DELIVERED, FAILED, RETRYING
 - VersionChangeType: CREATE, UPDATE, REVERT
+- SubscriptionTier: FREE, STARTER, PRO, ENTERPRISE
+- SubscriptionStatus: ACTIVE, PAST_DUE, CANCELED, EXPIRED, TRIALING
+- PaymentStatus: PENDING, PROCESSING, SUCCEEDED, FAILED, REFUNDED
+- PaymentProvider: STRIPE, PAYMOB, PAYTABS, PADDLE
 
 ### Email System
 - `src/lib/email/sender.ts` - SMTP integration with Nodemailer, factory pattern via `createEmailSender()`. Supports presets: gmail, outlook, yahoo, sendgrid, mailgun, ses, zoho
@@ -329,15 +336,101 @@ Change types: `CREATE` (initial), `UPDATE` (content changed), `REVERT` (restored
 
 Auto-generated change summaries: "Updated content", "Changed subject and content", etc.
 
+### A/B Testing System
+Server-side A/B testing for email campaigns with automatic winner selection.
+
+Files in `src/lib/ab-test/`:
+- `types.ts` - A/B test types and interfaces
+- `ab-test-service.ts` - CRUD operations, variant management
+- `ab-test-executor.ts` - Test execution engine (splitting, sending, winner selection)
+
+A/B Test API routes:
+- `GET /api/ab-tests` - List tests with pagination
+- `POST /api/ab-tests` - Create A/B test for campaign
+- `GET /api/ab-tests/[id]` - Get test details with stats
+- `PATCH /api/ab-tests/[id]` - Update test configuration
+- `DELETE /api/ab-tests/[id]` - Delete test
+- `POST /api/ab-tests/[id]/start` - Start A/B test
+- `POST /api/ab-tests/[id]/select-winner` - Manually select winner
+
+Test types: `SUBJECT`, `CONTENT`, `FROM_NAME`, `SEND_TIME`
+Winner criteria: `OPEN_RATE`, `CLICK_RATE`, `CONVERSION_RATE`
+
+Usage:
+```typescript
+import { createABTest, startABTest, selectWinner } from '@/lib/ab-test';
+
+// Create test with variants
+const test = await createABTest({
+  campaignId: 'campaign-123',
+  name: 'Subject Line Test',
+  testType: 'SUBJECT',
+  sampleSize: 20, // % of recipients for test phase
+  winnerCriteria: 'OPEN_RATE',
+  testDuration: 4, // hours
+  autoSelectWinner: true,
+  variants: [
+    { name: 'Variant A', subject: 'Hello {{firstName}}!' },
+    { name: 'Variant B', subject: 'Special offer for you' },
+  ],
+});
+```
+
+### Caching System
+Redis-based caching with automatic serialization and TTL management.
+
+Files in `src/lib/cache/`:
+- `redis-cache.ts` - Core caching functions with domain-specific helpers
+
+Cache prefixes: `template:`, `campaign:`, `user:`, `session:`, `stats:`
+
+Default TTLs:
+- Templates: 1 hour
+- Campaigns: 5 minutes
+- Users: 30 minutes
+- Sessions: 24 hours
+- Stats: 5 minutes
+
+Usage:
+```typescript
+import { cacheGetOrSet, invalidateTemplateCache, getCacheStats } from '@/lib/cache';
+
+// Cache with automatic fallback
+const template = await cacheGetOrSet(
+  `template:${id}`,
+  () => prisma.template.findUnique({ where: { id } }),
+  3600 // TTL in seconds
+);
+
+// Invalidate on update
+await invalidateTemplateCache(templateId);
+```
+
+### Automation System
+Visual workflow builder for automated email sequences.
+
+Files in `src/lib/automation/` (if exists) or API routes:
+- Automation CRUD and execution
+- Step types: EMAIL, DELAY, CONDITION, ACTION, WEBHOOK
+
+Trigger types: `SIGNUP`, `TAG_ADDED`, `DATE_FIELD`, `MANUAL`, `EMAIL_OPENED`, `LINK_CLICKED`, `FORM_SUBMITTED`
+
 ### State Management
 Zustand stores in `src/stores/`: campaign, analytics, schedule, preview, ab-test, automation, segmentation, email-builder, reputation, unsubscribe, settings.
 
 ### Rate Limiting
-Pre-configured limiters in `src/lib/rate-limit.ts`:
+Two implementations available in `src/lib/rate-limit/`:
+
+**In-memory limiters** (single-server deployments):
 - `apiRateLimiter`: 100 req/min
 - `authRateLimiter`: 5 req/min
 - `smtpTestRateLimiter`: 5 req/5min
 - `emailSendRateLimiter`: 10 req/min
+
+**Distributed limiters** (multi-server deployments via Redis):
+- `distributedApiLimiter`, `distributedAuthLimiter`, etc.
+- `checkRateLimitRedis()` - Pure Redis implementation
+- `checkRateLimitHybrid()` - Falls back to memory if Redis unavailable
 
 ### Security Utilities
 `src/lib/crypto.ts` provides:
@@ -350,6 +443,102 @@ Pre-configured limiters in `src/lib/rate-limit.ts`:
 `src/lib/security-headers.ts` provides:
 - `applySecurityHeaders()` - Applies X-Frame-Options, CSP, HSTS, etc.
 - Used automatically by middleware for all responses
+
+### Payment System
+Multi-gateway payment and subscription system supporting Stripe (International), Paymob (Egypt), PayTabs (MENA), and Paddle (Global MoR).
+
+Files in `src/lib/payments/`:
+- `types.ts` - Enums, interfaces, tier configuration, gateway types
+- `index.ts` - Gateway factory with lazy-loaded singletons
+- `stripe/` - Stripe SDK integration (checkout, portal, webhooks)
+- `paymob/` - Paymob HTTP client (card, wallet, kiosk payments)
+- `paytabs/` - PayTabs integration (Mada, Apple Pay support)
+- `paddle/` - Paddle SDK integration (overlay checkout)
+
+Files in `src/lib/subscription/`:
+- `middleware.ts` - Tier-based access control and feature gating
+- `usage.ts` - Usage tracking and limit enforcement
+
+Database models (Prisma):
+- `Subscription` - User subscription (tier, status, dates, limits)
+- `Payment` - Payment records (amount, provider, status)
+- `PaymentMethod` - Stored payment methods
+- `Invoice` - Invoice records with PDF URLs
+- `WebhookEvent` - Provider webhook event logs
+- `Coupon` - Discount coupons
+
+Subscription tiers:
+| Tier | Price | Emails/Month | Contacts | Features |
+|------|-------|--------------|----------|----------|
+| FREE | $0 | 100 | 500 | Basic templates, 1 SMTP |
+| STARTER | $4.99/mo | 5,000 | 5,000 | All templates, 3 SMTP, Analytics |
+| PRO | $14.99/mo | 50,000 | 50,000 | A/B testing, Automation, API access |
+| ENTERPRISE | $49.99/mo | Unlimited | Unlimited | Priority support, Custom integrations |
+
+Payment API routes:
+- `POST /api/payments/checkout` - Create checkout session
+- `GET /api/payments/portal` - Get customer portal URL
+- `GET /api/payments/subscription` - Get current subscription
+- `PATCH /api/payments/subscription` - Update subscription
+- `DELETE /api/payments/subscription` - Cancel subscription
+- `GET /api/payments/methods` - List payment methods
+- `POST /api/payments/methods` - Add payment method
+- `DELETE /api/payments/methods/[id]` - Remove payment method
+- `GET /api/payments/invoices` - List invoices
+
+Webhook routes (CSRF exempt):
+- `POST /api/webhooks/stripe` - Stripe webhook handler
+- `POST /api/webhooks/paymob` - Paymob callback handler
+- `POST /api/webhooks/paytabs` - PayTabs callback handler
+- `POST /api/webhooks/paddle` - Paddle webhook handler
+
+Usage:
+```typescript
+import { getPaymentGateway, SubscriptionTier, TIER_CONFIG } from '@/lib/payments';
+import { checkFeatureAccess, trackUsage, getUserLimits } from '@/lib/subscription';
+
+// Get gateway by provider
+const stripe = getPaymentGateway('stripe');
+const session = await stripe.createCheckoutSession({
+  userId: 'user-123',
+  tier: SubscriptionTier.PRO,
+  billingInterval: 'monthly',
+  successUrl: '/billing?success=true',
+  cancelUrl: '/billing?canceled=true',
+});
+
+// Check feature access
+const canUseABTesting = await checkFeatureAccess(userId, 'abTesting');
+
+// Track usage
+await trackUsage(userId, 'emailsSent', 100);
+
+// Get user limits
+const limits = await getUserLimits(userId);
+console.log(limits.emailsPerMonth, limits.abTesting);
+```
+
+Billing store (Zustand):
+```typescript
+import { useBillingStore, canAccessFeature, isPaidPlan } from '@/stores/billing-store';
+
+function BillingComponent() {
+  const { subscription, payments, fetchSubscription, createCheckout } = useBillingStore();
+
+  // Check access
+  const hasAbTesting = canAccessFeature(useBillingStore.getState(), 'abTesting');
+  const isPaid = isPaidPlan(useBillingStore.getState());
+}
+```
+
+Billing components in `src/components/billing/`:
+- `PricingTable` - Tier selection with monthly/yearly toggle
+- `SubscriptionStatus` - Current subscription, usage progress bars
+- `PaymentHistory` - Payment list with receipt links
+- `CheckoutButton` - Checkout with optional provider selection
+- `BillingPage` - Full billing management page with tabs
+
+Billing page route: `/[locale]/billing`
 
 ## Testing Strategy
 
@@ -392,3 +581,35 @@ Optional:
 - `NEXT_PUBLIC_CONTACT_PHONE` - Contact phone
 - `NEXT_PUBLIC_TRACK_OPENS` - Enable open tracking (default: true)
 - `NEXT_PUBLIC_TRACK_CLICKS` - Enable click tracking (default: true)
+
+Payment Providers (configure at least one):
+
+Stripe (International):
+- `STRIPE_SECRET_KEY` - Stripe secret key (sk_...)
+- `STRIPE_PUBLISHABLE_KEY` - Stripe publishable key (pk_...)
+- `STRIPE_WEBHOOK_SECRET` - Webhook signing secret (whsec_...)
+- `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` - Client-side publishable key
+- `STRIPE_PRICE_STARTER_MONTHLY`, `STRIPE_PRICE_STARTER_YEARLY` - Price IDs
+- `STRIPE_PRICE_PRO_MONTHLY`, `STRIPE_PRICE_PRO_YEARLY` - Price IDs
+- `STRIPE_PRICE_ENTERPRISE_MONTHLY`, `STRIPE_PRICE_ENTERPRISE_YEARLY` - Price IDs
+
+Paymob (Egypt):
+- `PAYMOB_API_KEY` - Paymob API key
+- `PAYMOB_INTEGRATION_ID_CARD` - Card payment integration ID
+- `PAYMOB_INTEGRATION_ID_WALLET` - Mobile wallet integration ID
+- `PAYMOB_HMAC_SECRET` - Webhook HMAC secret
+- `PAYMOB_IFRAME_ID` - Payment iframe ID
+
+PayTabs (MENA Region):
+- `PAYTABS_PROFILE_ID` - Merchant profile ID
+- `PAYTABS_SERVER_KEY` - Server-side API key
+- `PAYTABS_CLIENT_KEY` - Client-side key
+- `PAYTABS_REGION` - Region code (SAU, UAE, EGY, OMN, JOR, ARE)
+
+Paddle (Global MoR):
+- `PADDLE_API_KEY` - Paddle API key
+- `PADDLE_ENVIRONMENT` - Environment (sandbox or production)
+- `PADDLE_WEBHOOK_SECRET` - Webhook signature secret
+- `PADDLE_PRODUCT_STARTER_MONTHLY`, `PADDLE_PRODUCT_STARTER_YEARLY` - Product IDs
+- `PADDLE_PRODUCT_PRO_MONTHLY`, `PADDLE_PRODUCT_PRO_YEARLY` - Product IDs
+- `PADDLE_PRODUCT_ENTERPRISE_MONTHLY`, `PADDLE_PRODUCT_ENTERPRISE_YEARLY` - Product IDs

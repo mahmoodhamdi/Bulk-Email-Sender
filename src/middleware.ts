@@ -17,6 +17,10 @@ const PUBLIC_API_ROUTES = [
   '/api/tracking/unsubscribe',
   '/api/tracking/webhook',
   '/api/auth', // NextAuth.js routes handle their own CSRF
+  '/api/webhooks/stripe', // Stripe webhook (uses signature verification)
+  '/api/webhooks/paymob', // Paymob callback (uses HMAC verification)
+  '/api/webhooks/paytabs', // PayTabs callback
+  '/api/webhooks/paddle', // Paddle webhook (uses signature verification)
 ];
 
 export default function middleware(request: NextRequest) {
