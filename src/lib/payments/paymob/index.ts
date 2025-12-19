@@ -19,6 +19,7 @@ import {
   PaymentMethodInfo,
   RefundParams,
   RefundResult,
+  WebhookResult,
   TIER_CONFIG,
 } from '../types';
 import {
@@ -33,6 +34,7 @@ import {
   isPaymobConfigured,
 } from './client';
 import { prisma } from '@/lib/db/prisma';
+import { Prisma } from '@prisma/client';
 
 // Paymob subscription products (one-time payments simulating subscriptions)
 const PAYMOB_TIER_PRICES: Record<SubscriptionTier, { monthly: number; yearly: number }> = {
@@ -388,14 +390,21 @@ export class PaymobGateway implements PaymentGateway {
     // Cards are entered fresh each time
     const subscription = await prisma.subscription.findFirst({
       where: { providerCustomerId },
-      include: { paymentMethods: true },
     });
 
     if (!subscription) {
       return [];
     }
 
-    return subscription.paymentMethods.map(pm => ({
+    // Query payment methods separately using userId
+    const paymentMethods = await prisma.paymentMethod.findMany({
+      where: {
+        userId: subscription.userId,
+        provider: PaymentProvider.PAYMOB,
+      },
+    });
+
+    return paymentMethods.map(pm => ({
       id: pm.id,
       userId: pm.userId,
       provider: PaymentProvider.PAYMOB,
@@ -415,9 +424,44 @@ export class PaymobGateway implements PaymentGateway {
     });
   }
 
+  async setDefaultPaymentMethod(
+    providerCustomerId: string,
+    providerMethodId: string
+  ): Promise<void> {
+    // Paymob doesn't have persistent payment methods
+    // Just update our database to track the default
+    const subscription = await prisma.subscription.findFirst({
+      where: { providerCustomerId },
+    });
+
+    if (!subscription) {
+      throw new Error('Customer not found');
+    }
+
+    // Unset all other defaults
+    await prisma.paymentMethod.updateMany({
+      where: { userId: subscription.userId, provider: PaymentProvider.PAYMOB },
+      data: { isDefault: false },
+    });
+
+    // Set the new default
+    await prisma.paymentMethod.updateMany({
+      where: { providerMethodId, provider: PaymentProvider.PAYMOB },
+      data: { isDefault: true },
+    });
+  }
+
   // ===========================================
   // CUSTOMER MANAGEMENT
   // ===========================================
+
+  async getCustomerId(userId: string): Promise<string | null> {
+    const subscription = await prisma.subscription.findUnique({
+      where: { userId },
+    });
+
+    return subscription?.providerCustomerId || null;
+  }
 
   async createCustomer(
     userId: string,
@@ -482,7 +526,7 @@ export class PaymobGateway implements PaymentGateway {
         provider: PaymentProvider.PAYMOB,
         eventId: String(transactionId),
         eventType: success ? 'transaction.success' : 'transaction.failed',
-        payload: payload as Record<string, unknown>,
+        payload: payload as Prisma.InputJsonValue,
         processed: false,
       },
     });
@@ -554,8 +598,7 @@ export class PaymobGateway implements PaymentGateway {
       if (sourceData && sourceData.pan) {
         await prisma.paymentMethod.upsert({
           where: {
-            userId_provider_providerMethodId: {
-              userId,
+            provider_providerMethodId: {
               provider: PaymentProvider.PAYMOB,
               providerMethodId: String(transactionId),
             },
@@ -585,7 +628,7 @@ export class PaymobGateway implements PaymentGateway {
           status: PaymentStatus.FAILED,
           provider: PaymentProvider.PAYMOB,
           providerPaymentId: String(transactionId),
-          failureReason: 'Payment was declined or failed',
+          description: 'Payment was declined or failed',
         },
       });
     }
@@ -608,6 +651,33 @@ export class PaymobGateway implements PaymentGateway {
     }
 
     return data;
+  }
+
+  async handleWebhookEvent(event: unknown): Promise<WebhookResult> {
+    const payload = event as Record<string, unknown>;
+    const transactionObj = payload.obj as Record<string, unknown>;
+    const transactionId = transactionObj?.id as number;
+    const success = transactionObj?.success as boolean;
+    const eventType = success ? 'transaction.success' : 'transaction.failed';
+
+    try {
+      // Process the webhook using our internal handler
+      await this.handleWebhook(payload, ''); // Signature already verified in constructWebhookEvent
+
+      return {
+        received: true,
+        eventType,
+        processed: true,
+        paymentId: String(transactionId),
+      };
+    } catch (error) {
+      return {
+        received: true,
+        eventType,
+        processed: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      };
+    }
   }
 
   // ===========================================
@@ -721,7 +791,7 @@ export class PaymobGateway implements PaymentGateway {
   private mapPaymobTransactionStatus(
     transaction: { success: boolean; pending: boolean; is_voided: boolean; is_refunded: boolean }
   ): PaymentStatus {
-    if (transaction.is_voided) return PaymentStatus.CANCELED;
+    if (transaction.is_voided) return PaymentStatus.FAILED;
     if (transaction.is_refunded) return PaymentStatus.REFUNDED;
     if (transaction.pending) return PaymentStatus.PROCESSING;
     if (transaction.success) return PaymentStatus.COMPLETED;

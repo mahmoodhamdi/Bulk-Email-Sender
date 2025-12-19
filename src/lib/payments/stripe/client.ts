@@ -20,7 +20,7 @@ export function getStripeClient(): Stripe {
     }
 
     stripeInstance = new Stripe(secretKey, {
-      apiVersion: '2025-04-30.basil', // Latest API version
+      apiVersion: '2025-12-15.clover', // Latest API version
       typescript: true,
       appInfo: {
         name: 'Bulk Email Sender',

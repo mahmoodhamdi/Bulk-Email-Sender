@@ -29,6 +29,7 @@ const mockPrisma = {
   },
   paymentMethod: {
     findUnique: vi.fn(),
+    findMany: vi.fn(),
     upsert: vi.fn(),
     delete: vi.fn(),
   },
@@ -326,21 +327,23 @@ describe('Paddle Gateway', () => {
       const gateway = new PaddleGateway();
 
       mockPrisma.subscription.findFirst.mockResolvedValue({
+        userId: 'user123',
         providerCustomerId: 'ctm_test123',
-        paymentMethods: [
-          {
-            id: 'pm_123',
-            userId: 'user123',
-            provider: 'PADDLE',
-            type: 'CARD',
-            isDefault: true,
-            cardBrand: 'visa',
-            cardLast4: '4242',
-            cardExpMonth: 12,
-            cardExpYear: 2025,
-          },
-        ],
       });
+
+      mockPrisma.paymentMethod.findMany.mockResolvedValue([
+        {
+          id: 'pm_123',
+          userId: 'user123',
+          provider: 'PADDLE',
+          type: 'CARD',
+          isDefault: true,
+          cardBrand: 'visa',
+          cardLast4: '4242',
+          cardExpMonth: 12,
+          cardExpYear: 2025,
+        },
+      ]);
 
       const methods = await gateway.listPaymentMethods('ctm_test123');
 
@@ -622,7 +625,7 @@ describe('Paddle Gateway', () => {
           userId: 'user123',
           status: PaymentStatus.FAILED,
           provider: PaymentProvider.PADDLE,
-          failureReason: 'card_declined',
+          description: 'card_declined',
         }),
       });
     });

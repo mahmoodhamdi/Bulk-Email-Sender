@@ -1,63 +1,131 @@
 version: '3.8'
 
+# ============================================================
+# Bulk Email Sender - Docker Compose Configuration
+# ============================================================
+# Environment Variables:
+#   APP_PORT    - Application port (default: 3000)
+#   DB_PORT     - PostgreSQL port (default: 5432)
+#   REDIS_PORT  - Redis port (default: 6379)
+#   PROJECT     - Project name prefix (default: bes)
+#
+# Usage:
+#   docker-compose up -d
+#   APP_PORT=3001 docker-compose up -d
+#   Or use the provided start script: ./docker/start.sh
+# ============================================================
+
 services:
+  # Main Next.js Application
   app:
     build:
       context: ..
       dockerfile: docker/Dockerfile
-    container_name: bulk-email-sender
+    image: bulk-email-sender:latest
+    container_name: ${PROJECT:-bes}-app
     ports:
-      - "3000:3000"
+      - "${APP_PORT:-3000}:3000"
     environment:
       - NODE_ENV=production
       - DATABASE_URL=postgresql://postgres:postgres@db:5432/emailsender
       - REDIS_URL=redis://redis:6379
-      - NEXT_PUBLIC_APP_URL=http://localhost:3000
-      - TRACKING_URL=http://localhost:3000/api/track
+      - NEXT_PUBLIC_APP_URL=http://localhost:${APP_PORT:-3000}
+      - TRACKING_URL=http://localhost:${APP_PORT:-3000}/api/tracking
+      # Add your secrets here or use .env file
+      - NEXTAUTH_SECRET=${NEXTAUTH_SECRET:-change-me-in-production}
+      - NEXTAUTH_URL=http://localhost:${APP_PORT:-3000}
     depends_on:
       db:
         condition: service_healthy
       redis:
-        condition: service_started
+        condition: service_healthy
     restart: unless-stopped
     networks:
-      - app-network
+      - bes-network
+    labels:
+      - "app.name=Bulk Email Sender"
+      - "app.version=1.0.0"
+      - "app.port=${APP_PORT:-3000}"
 
+  # PostgreSQL Database
   db:
     image: postgres:15-alpine
-    container_name: bulk-email-db
+    container_name: ${PROJECT:-bes}-postgres
     environment:
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres
-      - POSTGRES_DB=emailsender
+      - POSTGRES_USER=${DB_USER:-postgres}
+      - POSTGRES_PASSWORD=${DB_PASSWORD:-postgres}
+      - POSTGRES_DB=${DB_NAME:-emailsender}
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - bes-postgres-data:/var/lib/postgresql/data
     ports:
-      - "5432:5432"
+      - "${DB_PORT:-5432}:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres}"]
       interval: 5s
       timeout: 5s
       retries: 5
     restart: unless-stopped
     networks:
-      - app-network
+      - bes-network
+    labels:
+      - "app.name=Bulk Email Sender Database"
+      - "app.component=postgres"
 
+  # Redis Cache & Queue
   redis:
     image: redis:7-alpine
-    container_name: bulk-email-redis
+    container_name: ${PROJECT:-bes}-redis
+    command: redis-server --appendonly yes
     ports:
-      - "6379:6379"
+      - "${REDIS_PORT:-6379}:6379"
     volumes:
-      - redis_data:/data
+      - bes-redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
     restart: unless-stopped
     networks:
-      - app-network
+      - bes-network
+    labels:
+      - "app.name=Bulk Email Sender Redis"
+      - "app.component=redis"
+
+  # Email Worker (optional - for background processing)
+  worker:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    image: bulk-email-sender:latest
+    container_name: ${PROJECT:-bes}-worker
+    command: ["node", "worker.js"]
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=postgresql://postgres:postgres@db:5432/emailsender
+      - REDIS_URL=redis://redis:6379
+      - WORKER_CONCURRENCY=${WORKER_CONCURRENCY:-5}
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - bes-network
+    profiles:
+      - worker
+    labels:
+      - "app.name=Bulk Email Sender Worker"
+      - "app.component=worker"
 
 volumes:
-  postgres_data:
-  redis_data:
+  bes-postgres-data:
+    name: ${PROJECT:-bes}-postgres-data
+  bes-redis-data:
+    name: ${PROJECT:-bes}-redis-data
 
 networks:
-  app-network:
+  bes-network:
+    name: ${PROJECT:-bes}-network
     driver: bridge

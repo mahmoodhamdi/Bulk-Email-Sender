@@ -19,6 +19,7 @@ import {
   PaymentMethodInfo,
   RefundParams,
   RefundResult,
+  WebhookResult,
   TIER_CONFIG,
 } from '../types';
 import {
@@ -31,6 +32,7 @@ import {
   isPayTabsConfigured,
 } from './client';
 import { prisma } from '@/lib/db/prisma';
+import { Prisma } from '@prisma/client';
 
 // PayTabs subscription products (prices in SAR cents for Saudi Arabia)
 const PAYTABS_TIER_PRICES: Record<SubscriptionTier, { monthly: number; yearly: number }> = {
@@ -351,14 +353,21 @@ export class PayTabsGateway implements PaymentGateway {
   ): Promise<PaymentMethodInfo[]> {
     const subscription = await prisma.subscription.findFirst({
       where: { providerCustomerId },
-      include: { paymentMethods: true },
     });
 
     if (!subscription) {
       return [];
     }
 
-    return subscription.paymentMethods.map(pm => ({
+    // Query payment methods separately using userId
+    const paymentMethods = await prisma.paymentMethod.findMany({
+      where: {
+        userId: subscription.userId,
+        provider: PaymentProvider.PAYTABS,
+      },
+    });
+
+    return paymentMethods.map(pm => ({
       id: pm.id,
       userId: pm.userId,
       provider: PaymentProvider.PAYTABS,
@@ -389,9 +398,40 @@ export class PayTabsGateway implements PaymentGateway {
     });
   }
 
+  async setDefaultPaymentMethod(
+    providerCustomerId: string,
+    providerMethodId: string
+  ): Promise<void> {
+    const subscription = await prisma.subscription.findFirst({
+      where: { providerCustomerId },
+    });
+
+    if (!subscription) {
+      throw new Error('Customer not found');
+    }
+
+    await prisma.paymentMethod.updateMany({
+      where: { userId: subscription.userId, provider: PaymentProvider.PAYTABS },
+      data: { isDefault: false },
+    });
+
+    await prisma.paymentMethod.updateMany({
+      where: { providerMethodId, provider: PaymentProvider.PAYTABS },
+      data: { isDefault: true },
+    });
+  }
+
   // ===========================================
   // CUSTOMER MANAGEMENT
   // ===========================================
+
+  async getCustomerId(userId: string): Promise<string | null> {
+    const subscription = await prisma.subscription.findUnique({
+      where: { userId },
+    });
+
+    return subscription?.providerCustomerId || null;
+  }
 
   async createCustomer(
     userId: string,
@@ -447,7 +487,7 @@ export class PayTabsGateway implements PaymentGateway {
         provider: PaymentProvider.PAYTABS,
         eventId: tranRef,
         eventType: responseStatus === 'A' ? 'transaction.success' : 'transaction.failed',
-        payload: payload as Record<string, unknown>,
+        payload: payload as Prisma.InputJsonValue,
         processed: false,
       },
     });
@@ -522,8 +562,7 @@ export class PayTabsGateway implements PaymentGateway {
         const paymentInfo = payload.payment_info as Record<string, unknown>;
         await prisma.paymentMethod.upsert({
           where: {
-            userId_provider_providerMethodId: {
-              userId,
+            provider_providerMethodId: {
               provider: PaymentProvider.PAYTABS,
               providerMethodId: token,
             },
@@ -553,7 +592,7 @@ export class PayTabsGateway implements PaymentGateway {
           status: PaymentStatus.FAILED,
           provider: PaymentProvider.PAYTABS,
           providerPaymentId: tranRef,
-          failureReason: (payload.payment_result as Record<string, unknown>)?.response_message as string,
+          description: (payload.payment_result as Record<string, unknown>)?.response_message as string,
         },
       });
     }
@@ -571,6 +610,31 @@ export class PayTabsGateway implements PaymentGateway {
   ): Promise<Record<string, unknown>> {
     // PayTabs sends JSON directly, no signature verification on raw payload
     return JSON.parse(payload);
+  }
+
+  async handleWebhookEvent(event: unknown): Promise<WebhookResult> {
+    const payload = event as Record<string, unknown>;
+    const tranRef = payload.tran_ref as string;
+    const responseStatus = (payload.payment_result as Record<string, unknown>)?.response_status as string;
+    const eventType = responseStatus === 'A' ? 'transaction.success' : 'transaction.failed';
+
+    try {
+      await this.handleWebhook(payload, '');
+
+      return {
+        received: true,
+        eventType,
+        processed: true,
+        paymentId: tranRef,
+      };
+    } catch (error) {
+      return {
+        received: true,
+        eventType,
+        processed: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      };
+    }
   }
 
   // ===========================================
@@ -598,7 +662,7 @@ export class PayTabsGateway implements PaymentGateway {
       case 'A': return PaymentStatus.COMPLETED;
       case 'H': return PaymentStatus.PROCESSING;
       case 'P': return PaymentStatus.PENDING;
-      case 'V': return PaymentStatus.CANCELED;
+      case 'V': return PaymentStatus.FAILED;
       case 'E':
       case 'D': return PaymentStatus.FAILED;
       default: return PaymentStatus.PENDING;
