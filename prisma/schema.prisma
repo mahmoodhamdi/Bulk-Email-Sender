@@ -37,6 +37,11 @@ model User {
   abTests       ABTest[]
   automations   Automation[]
 
+  // Payment relations
+  subscription    Subscription?
+  payments        Payment[]
+  paymentMethods  PaymentMethod[]
+
   @@index([email])
   @@index([role])
 }
@@ -767,4 +772,297 @@ enum StepExecutionStatus {
   COMPLETED
   FAILED
   SKIPPED
+}
+
+// ==================== Payment & Subscription Models ====================
+
+model Subscription {
+  id                     String   @id @default(cuid())
+  userId                 String   @unique
+  user                   User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Tier & Status
+  tier                   SubscriptionTier @default(FREE)
+  status                 SubscriptionStatus @default(ACTIVE)
+
+  // Payment Provider
+  provider               PaymentProvider?
+  providerSubscriptionId String?
+  providerCustomerId     String?
+  providerPriceId        String?
+
+  // Billing Cycle
+  currentPeriodStart     DateTime?
+  currentPeriodEnd       DateTime?
+  cancelAtPeriodEnd      Boolean  @default(false)
+  canceledAt             DateTime?
+  trialStart             DateTime?
+  trialEnd               DateTime?
+
+  // Usage Tracking
+  emailsSentThisMonth    Int      @default(0)
+  emailLimit             Int?
+  contactsCount          Int      @default(0)
+  contactLimit           Int?
+  usageResetAt           DateTime?
+
+  // Metadata
+  metadata               Json?
+
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  @@index([provider, providerSubscriptionId])
+  @@index([status])
+  @@index([tier])
+}
+
+enum SubscriptionTier {
+  FREE
+  STARTER
+  PRO
+  ENTERPRISE
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  CANCELED
+  PAST_DUE
+  TRIALING
+  PAUSED
+  UNPAID
+}
+
+enum PaymentProvider {
+  STRIPE
+  PAYMOB
+  PAYTABS
+  PADDLE
+}
+
+model Payment {
+  id                String   @id @default(cuid())
+  userId            String
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Amount
+  amount            Int      // In smallest currency unit (cents/piasters)
+  currency          String   @default("USD")
+
+  // Status
+  status            PaymentStatus @default(PENDING)
+
+  // Provider Info
+  provider          PaymentProvider
+  providerPaymentId String?
+  paymentMethodType String?  // card, wallet, bank, kiosk
+
+  // Details
+  description       String?
+  receiptUrl        String?
+  receiptNumber     String?
+
+  // Refund tracking
+  refundedAmount    Int      @default(0)
+  refundReason      String?
+
+  // Metadata
+  metadata          Json?
+
+  // Error handling
+  failureCode       String?
+  failureMessage    String?
+
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  // Relations
+  invoice           Invoice? @relation(fields: [invoiceId], references: [id])
+  invoiceId         String?
+
+  @@index([userId])
+  @@index([provider, providerPaymentId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+enum PaymentStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  REFUNDED
+  PARTIALLY_REFUNDED
+}
+
+model PaymentMethod {
+  id                  String   @id @default(cuid())
+  userId              String
+  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Provider Info
+  provider            PaymentProvider
+  providerMethodId    String
+
+  // Type & Details
+  type                PaymentMethodType
+
+  // Card details (if applicable)
+  cardBrand           String?  // visa, mastercard, amex, etc.
+  cardLast4           String?
+  cardExpMonth        Int?
+  cardExpYear         Int?
+  cardFingerprint     String?
+
+  // Wallet details (if applicable)
+  walletType          String?  // vodafone_cash, orange, apple_pay, google_pay
+  walletPhone         String?
+
+  // Status
+  isDefault           Boolean  @default(false)
+  isValid             Boolean  @default(true)
+
+  // Billing address (optional)
+  billingName         String?
+  billingEmail        String?
+  billingPhone        String?
+  billingCountry      String?
+  billingCity         String?
+  billingLine1        String?
+  billingLine2        String?
+  billingPostalCode   String?
+
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@unique([provider, providerMethodId])
+  @@index([userId])
+  @@index([isDefault])
+}
+
+enum PaymentMethodType {
+  CARD
+  WALLET
+  BANK_ACCOUNT
+  KIOSK
+}
+
+model Invoice {
+  id                  String    @id @default(cuid())
+  number              String    @unique
+  userId              String
+
+  // Provider Info
+  provider            PaymentProvider?
+  providerInvoiceId   String?
+
+  // Amounts (in smallest currency unit)
+  subtotal            Int
+  tax                 Int       @default(0)
+  discount            Int       @default(0)
+  total               Int
+  amountPaid          Int       @default(0)
+  amountDue           Int
+  currency            String    @default("USD")
+
+  // Status
+  status              InvoiceStatus @default(DRAFT)
+
+  // Dates
+  dueDate             DateTime?
+  paidAt              DateTime?
+  voidedAt            DateTime?
+
+  // URLs
+  invoicePdfUrl       String?
+  hostedInvoiceUrl    String?
+
+  // Line items stored as JSON
+  lineItems           Json?
+
+  // Metadata
+  metadata            Json?
+
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  // Relations
+  payments            Payment[]
+
+  @@index([userId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+enum InvoiceStatus {
+  DRAFT
+  OPEN
+  PAID
+  VOID
+  UNCOLLECTIBLE
+}
+
+model PaymentWebhookEvent {
+  id                String   @id @default(cuid())
+  provider          PaymentProvider
+  eventType         String
+  eventId           String?
+
+  // Raw payload for debugging
+  payload           Json
+
+  // Processing status
+  processed         Boolean  @default(false)
+  processedAt       DateTime?
+  error             String?
+
+  createdAt         DateTime @default(now())
+
+  @@unique([provider, eventId])
+  @@index([provider, eventType])
+  @@index([processed])
+  @@index([createdAt])
+}
+
+model Coupon {
+  id                String    @id @default(cuid())
+  code              String    @unique
+
+  // Discount
+  discountType      DiscountType
+  discountValue     Int       // Percentage (0-100) or amount in cents
+  currency          String?   // Required if fixed_amount
+
+  // Limits
+  maxRedemptions    Int?
+  timesRedeemed     Int       @default(0)
+  maxRedemptionsPerUser Int?
+
+  // Validity
+  validFrom         DateTime  @default(now())
+  validUntil        DateTime?
+
+  // Restrictions
+  applicableTiers   SubscriptionTier[] @default([])
+  minimumAmount     Int?
+  firstTimeOnly     Boolean   @default(false)
+
+  // Status
+  active            Boolean   @default(true)
+
+  // Provider sync
+  provider          PaymentProvider?
+  providerCouponId  String?
+
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@index([code])
+  @@index([active])
+  @@index([validFrom, validUntil])
+}
+
+enum DiscountType {
+  PERCENTAGE
+  FIXED_AMOUNT
 }
