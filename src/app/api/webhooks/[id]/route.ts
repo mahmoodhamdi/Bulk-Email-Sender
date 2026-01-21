@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { ZodError } from 'zod';
 import { apiRateLimiter } from '@/lib/rate-limit';
+import { prisma } from '@/lib/db/prisma';
 import { validateWebhookUrl } from '@/lib/ssrf-protection';
 import {
   getWebhook,
@@ -9,21 +10,40 @@ import {
   getDeliveryStats,
   updateWebhookSchema,
 } from '@/lib/webhook';
+import { withAuth, createErrorResponse, AuthContext } from '@/lib/auth';
 
 interface RouteParams {
-  params: Promise<{ id: string }>;
+  id: string;
+}
+
+/**
+ * Helper function to validate webhook ownership
+ */
+async function validateWebhookOwnership(webhookId: string, userId: string): Promise<boolean> {
+  const webhook = await prisma.webhook.findFirst({
+    where: {
+      id: webhookId,
+      userId: userId,
+    },
+    select: { id: true },
+  });
+  return webhook !== null;
 }
 
 /**
  * GET /api/webhooks/[id]
  * Get webhook details including recent statistics
+ * Requires authentication - users can only access their own webhooks
  */
-export async function GET(request: NextRequest, { params }: RouteParams) {
+export const GET = withAuth(async (request: NextRequest, context: AuthContext, params?: RouteParams) => {
   try {
-    const { id } = await params;
+    if (!params?.id) {
+      return createErrorResponse('ID is required', 400);
+    }
+    const { id } = params;
 
     // Rate limiting
-    const rateLimitResult = apiRateLimiter.check(`webhooks-get-${id}`);
+    const rateLimitResult = apiRateLimiter.check(`webhooks-get-${context.userId}-${id}`);
     if (!rateLimitResult.success) {
       const retryAfter = Math.ceil((rateLimitResult.resetAt - Date.now()) / 1000);
       return NextResponse.json(
@@ -32,13 +52,16 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       );
     }
 
+    // Owner validation - check if webhook belongs to the user
+    const isOwner = await validateWebhookOwnership(id, context.userId);
+    if (!isOwner) {
+      return createErrorResponse('Webhook not found', 404);
+    }
+
     // Get webhook
     const webhook = await getWebhook(id);
     if (!webhook) {
-      return NextResponse.json(
-        { error: 'Webhook not found' },
-        { status: 404 }
-      );
+      return createErrorResponse('Webhook not found', 404);
     }
 
     // Get delivery statistics
@@ -64,18 +87,22 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       { status: 500 }
     );
   }
-}
+}, { requiredPermission: 'webhooks:read' });
 
 /**
  * PATCH /api/webhooks/[id]
  * Update webhook configuration
+ * Requires authentication - users can only update their own webhooks
  */
-export async function PATCH(request: NextRequest, { params }: RouteParams) {
+export const PATCH = withAuth(async (request: NextRequest, context: AuthContext, params?: RouteParams) => {
   try {
-    const { id } = await params;
+    if (!params?.id) {
+      return createErrorResponse('ID is required', 400);
+    }
+    const { id } = params;
 
     // Rate limiting
-    const rateLimitResult = apiRateLimiter.check(`webhooks-update-${id}`);
+    const rateLimitResult = apiRateLimiter.check(`webhooks-update-${context.userId}-${id}`);
     if (!rateLimitResult.success) {
       const retryAfter = Math.ceil((rateLimitResult.resetAt - Date.now()) / 1000);
       return NextResponse.json(
@@ -84,13 +111,16 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       );
     }
 
+    // Owner validation - check if webhook belongs to the user
+    const isOwner = await validateWebhookOwnership(id, context.userId);
+    if (!isOwner) {
+      return createErrorResponse('Webhook not found', 404);
+    }
+
     // Check if webhook exists
     const existingWebhook = await getWebhook(id);
     if (!existingWebhook) {
-      return NextResponse.json(
-        { error: 'Webhook not found' },
-        { status: 404 }
-      );
+      return createErrorResponse('Webhook not found', 404);
     }
 
     // Parse and validate body
@@ -151,18 +181,22 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       { status: 500 }
     );
   }
-}
+}, { requiredPermission: 'webhooks:write' });
 
 /**
  * DELETE /api/webhooks/[id]
  * Delete a webhook and all its delivery history
+ * Requires authentication - users can only delete their own webhooks
  */
-export async function DELETE(request: NextRequest, { params }: RouteParams) {
+export const DELETE = withAuth(async (request: NextRequest, context: AuthContext, params?: RouteParams) => {
   try {
-    const { id } = await params;
+    if (!params?.id) {
+      return createErrorResponse('ID is required', 400);
+    }
+    const { id } = params;
 
     // Rate limiting
-    const rateLimitResult = apiRateLimiter.check(`webhooks-delete-${id}`);
+    const rateLimitResult = apiRateLimiter.check(`webhooks-delete-${context.userId}-${id}`);
     if (!rateLimitResult.success) {
       const retryAfter = Math.ceil((rateLimitResult.resetAt - Date.now()) / 1000);
       return NextResponse.json(
@@ -171,13 +205,16 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       );
     }
 
+    // Owner validation - check if webhook belongs to the user
+    const isOwner = await validateWebhookOwnership(id, context.userId);
+    if (!isOwner) {
+      return createErrorResponse('Webhook not found', 404);
+    }
+
     // Check if webhook exists
     const existingWebhook = await getWebhook(id);
     if (!existingWebhook) {
-      return NextResponse.json(
-        { error: 'Webhook not found' },
-        { status: 404 }
-      );
+      return createErrorResponse('Webhook not found', 404);
     }
 
     // Delete webhook (cascades to deliveries)
@@ -194,4 +231,4 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       { status: 500 }
     );
   }
-}
+}, { requiredPermission: 'webhooks:delete' });

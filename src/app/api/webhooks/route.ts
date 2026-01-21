@@ -8,15 +8,17 @@ import {
   createWebhookSchema,
   listWebhooksQuerySchema,
 } from '@/lib/webhook';
+import { withAuth, AuthContext } from '@/lib/auth';
 
 /**
  * GET /api/webhooks
  * List webhooks with pagination and filtering
+ * Requires authentication - users can only see their own webhooks
  */
-export async function GET(request: NextRequest) {
+export const GET = withAuth(async (request: NextRequest, context: AuthContext) => {
   try {
     // Rate limiting
-    const rateLimitResult = apiRateLimiter.check('webhooks-list');
+    const rateLimitResult = apiRateLimiter.check(`webhooks-list-${context.userId}`);
     if (!rateLimitResult.success) {
       const retryAfter = Math.ceil((rateLimitResult.resetAt - Date.now()) / 1000);
       return NextResponse.json(
@@ -37,8 +39,9 @@ export async function GET(request: NextRequest) {
     // Validate parameters
     const validated = listWebhooksQuerySchema.parse(params);
 
-    // Get webhooks
+    // Get webhooks - filter by userId for owner validation
     const { webhooks, total } = await listWebhooks({
+      userId: context.userId, // Owner filter - users can only see their own webhooks
       isActive: validated.isActive,
       event: validated.event,
       page: validated.page,
@@ -74,16 +77,17 @@ export async function GET(request: NextRequest) {
       { status: 500 }
     );
   }
-}
+}, { requiredPermission: 'webhooks:read' });
 
 /**
  * POST /api/webhooks
  * Create a new webhook
+ * Requires authentication - webhook is associated with the authenticated user
  */
-export async function POST(request: NextRequest) {
+export const POST = withAuth(async (request: NextRequest, context: AuthContext) => {
   try {
     // Rate limiting
-    const rateLimitResult = apiRateLimiter.check('webhooks-create');
+    const rateLimitResult = apiRateLimiter.check(`webhooks-create-${context.userId}`);
     if (!rateLimitResult.success) {
       const retryAfter = Math.ceil((rateLimitResult.resetAt - Date.now()) / 1000);
       return NextResponse.json(
@@ -108,11 +112,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Create webhook
+    // Create webhook - associate with authenticated user
     const webhook = await createWebhook({
       name: validated.name,
       url: validated.url,
       events: validated.events,
+      userId: context.userId, // Associate with authenticated user
       secret: validated.secret,
       authType: validated.authType,
       authHeader: validated.authHeader,
@@ -161,4 +166,4 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     );
   }
-}
+}, { requiredPermission: 'webhooks:write' });

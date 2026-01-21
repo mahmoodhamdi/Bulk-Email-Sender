@@ -3,16 +3,18 @@ import { prisma } from '@/lib/db/prisma';
 import { createCampaignSchema, listCampaignsSchema } from '@/lib/validations/campaign';
 import { apiRateLimiter } from '@/lib/rate-limit';
 import { sanitizeEmailHtml } from '@/lib/sanitize-server';
+import { withAuth, createErrorResponse, AuthContext } from '@/lib/auth';
 import { ZodError } from 'zod';
 
 /**
  * GET /api/campaigns
  * List campaigns with pagination and filtering
+ * Requires authentication - users can only see their own campaigns
  */
-export async function GET(request: NextRequest) {
+export const GET = withAuth(async (request: NextRequest, context: AuthContext) => {
   try {
     // Rate limiting
-    const rateLimitResult = apiRateLimiter.check('campaigns-list');
+    const rateLimitResult = apiRateLimiter.check(`campaigns-list-${context.userId}`);
     if (!rateLimitResult.success) {
       const retryAfter = Math.ceil((rateLimitResult.resetAt - Date.now()) / 1000);
       return NextResponse.json(
@@ -36,8 +38,10 @@ export async function GET(request: NextRequest) {
     const validated = listCampaignsSchema.parse(params);
     const { page, limit, status, search, sortBy, sortOrder } = validated;
 
-    // Build where clause
-    const where: Record<string, unknown> = {};
+    // Build where clause - ALWAYS filter by userId for security
+    const where: Record<string, unknown> = {
+      userId: context.userId, // Owner filter - users can only see their own campaigns
+    };
     if (status) {
       where.status = status;
     }
@@ -89,16 +93,17 @@ export async function GET(request: NextRequest) {
       { status: 500 }
     );
   }
-}
+}, { requiredPermission: 'campaigns:read' });
 
 /**
  * POST /api/campaigns
  * Create a new campaign
+ * Requires authentication - campaign is associated with the authenticated user
  */
-export async function POST(request: NextRequest) {
+export const POST = withAuth(async (request: NextRequest, context: AuthContext) => {
   try {
     // Rate limiting
-    const rateLimitResult = apiRateLimiter.check('campaigns-create');
+    const rateLimitResult = apiRateLimiter.check(`campaigns-create-${context.userId}`);
     if (!rateLimitResult.success) {
       const retryAfter = Math.ceil((rateLimitResult.resetAt - Date.now()) / 1000);
       return NextResponse.json(
@@ -114,7 +119,7 @@ export async function POST(request: NextRequest) {
     // Sanitize HTML content to prevent XSS attacks (preserves merge tags)
     const sanitizedContent = sanitizeEmailHtml(validated.content);
 
-    // Create campaign
+    // Create campaign - associate with authenticated user
     const campaign = await prisma.campaign.create({
       data: {
         name: validated.name,
@@ -127,6 +132,7 @@ export async function POST(request: NextRequest) {
         templateId: validated.templateId,
         scheduledAt: validated.scheduledAt ? new Date(validated.scheduledAt) : null,
         status: validated.scheduledAt ? 'SCHEDULED' : 'DRAFT',
+        userId: context.userId, // Associate with authenticated user
       },
       include: {
         template: {
@@ -155,4 +161,4 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     );
   }
-}
+}, { requiredPermission: 'campaigns:write' });

@@ -5,21 +5,40 @@ import { compareVersionsQuerySchema } from '@/lib/validations/template-version';
 import { apiRateLimiter } from '@/lib/rate-limit';
 import { compareVersions } from '@/lib/template';
 import { ZodError } from 'zod';
+import { withAuth, createErrorResponse, AuthContext } from '@/lib/auth';
 
 interface RouteParams {
-  params: Promise<{ id: string }>;
+  id: string;
+}
+
+/**
+ * Helper function to validate template ownership
+ */
+async function validateTemplateOwnership(templateId: string, userId: string): Promise<boolean> {
+  const template = await prisma.template.findFirst({
+    where: {
+      id: templateId,
+      userId: userId,
+    },
+    select: { id: true },
+  });
+  return template !== null;
 }
 
 /**
  * GET /api/templates/[id]/versions/compare?v1=X&v2=Y
  * Compare two versions of a template
+ * Requires authentication - users can only compare versions of their own templates
  */
-export async function GET(request: NextRequest, { params }: RouteParams) {
+export const GET = withAuth(async (request: NextRequest, context: AuthContext, params?: RouteParams) => {
   try {
-    const { id } = await params;
+    if (!params?.id) {
+      return createErrorResponse('Template ID is required', 400);
+    }
+    const { id } = params;
 
     // Rate limiting
-    const rateLimitResult = apiRateLimiter.check(`template-compare-${id}`);
+    const rateLimitResult = apiRateLimiter.check(`template-compare-${context.userId}-${id}`);
     if (!rateLimitResult.success) {
       const retryAfter = Math.ceil((rateLimitResult.resetAt - Date.now()) / 1000);
       return NextResponse.json(
@@ -31,17 +50,10 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     // Validate ID
     templateIdSchema.parse({ id });
 
-    // Check if template exists
-    const template = await prisma.template.findUnique({
-      where: { id },
-      select: { id: true },
-    });
-
-    if (!template) {
-      return NextResponse.json(
-        { error: 'Template not found' },
-        { status: 404 }
-      );
+    // Owner validation - check if template belongs to the user
+    const isOwner = await validateTemplateOwnership(id, context.userId);
+    if (!isOwner) {
+      return createErrorResponse('Template not found', 404);
     }
 
     // Parse and validate query parameters
@@ -64,10 +76,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     const comparison = await compareVersions(id, validated.v1, validated.v2);
 
     if (!comparison) {
-      return NextResponse.json(
-        { error: 'One or both versions not found' },
-        { status: 404 }
-      );
+      return createErrorResponse('One or both versions not found', 404);
     }
 
     return NextResponse.json({ data: comparison });
@@ -84,4 +93,4 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       { status: 500 }
     );
   }
-}
+}, { requiredPermission: 'templates:read' });

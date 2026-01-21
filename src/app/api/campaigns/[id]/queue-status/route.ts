@@ -1,41 +1,45 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
 import { apiRateLimiter } from '@/lib/rate-limit';
-import { getCampaignQueueStatus, getCampaignJobs } from '@/lib/queue';
+import { withAuth, createErrorResponse, AuthContext } from '@/lib/auth';
+import { getCampaignQueueStatus } from '@/lib/queue';
 
-type RouteContext = {
-  params: Promise<{ id: string }>;
-};
+interface RouteParams {
+  id: string;
+}
 
 /**
  * GET /api/campaigns/[id]/queue-status - Get campaign queue status
+ * Requires authentication - users can only view their own campaign status
  */
-export async function GET(request: NextRequest, context: RouteContext) {
-  // Rate limiting
-  const rateLimitResult = await apiRateLimiter.check(
-    request.headers.get('x-forwarded-for') || 'anonymous'
-  );
-  if (!rateLimitResult.success) {
-    return NextResponse.json(
-      { error: 'Too many requests', resetAt: rateLimitResult.resetAt },
-      { status: 429 }
-    );
-  }
-
+export const GET = withAuth(async (request: NextRequest, context: AuthContext, params?: RouteParams) => {
   try {
-    const { id: campaignId } = await context.params;
+    if (!params?.id) {
+      return createErrorResponse('Campaign ID is required', 400);
+    }
 
-    // Validate campaign ID
-    if (!campaignId || campaignId.length < 20) {
+    const { id: campaignId } = params;
+
+    // Rate limiting
+    const rateLimitResult = apiRateLimiter.check(`queue-status-${context.userId}-${campaignId}`);
+    if (!rateLimitResult.success) {
       return NextResponse.json(
-        { error: 'Invalid campaign ID' },
-        { status: 400 }
+        { error: 'Too many requests', resetAt: rateLimitResult.resetAt },
+        { status: 429 }
       );
     }
 
-    // Check if campaign exists
-    const campaign = await prisma.campaign.findUnique({
-      where: { id: campaignId },
+    // Validate campaign ID
+    if (!campaignId || campaignId.length < 20) {
+      return createErrorResponse('Invalid campaign ID', 400);
+    }
+
+    // Check if campaign exists AND belongs to the user (owner validation)
+    const campaign = await prisma.campaign.findFirst({
+      where: {
+        id: campaignId,
+        userId: context.userId, // Owner validation
+      },
       select: {
         id: true,
         name: true,
@@ -53,10 +57,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
     });
 
     if (!campaign) {
-      return NextResponse.json(
-        { error: 'Campaign not found' },
-        { status: 404 }
-      );
+      return createErrorResponse('Campaign not found', 404);
     }
 
     // Get queue status
@@ -134,4 +135,4 @@ export async function GET(request: NextRequest, context: RouteContext) {
       { status: 500 }
     );
   }
-}
+}, { requiredPermission: 'campaigns:read' });

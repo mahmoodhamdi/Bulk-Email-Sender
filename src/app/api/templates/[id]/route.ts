@@ -4,22 +4,27 @@ import { updateTemplateSchema, templateIdSchema, duplicateTemplateSchema } from 
 import { apiRateLimiter } from '@/lib/rate-limit';
 import { createVersion, createInitialVersion } from '@/lib/template';
 import { sanitizeEmailHtml } from '@/lib/sanitize-server';
+import { withAuth, createErrorResponse, AuthContext } from '@/lib/auth';
 import { ZodError } from 'zod';
 
 interface RouteParams {
-  params: Promise<{ id: string }>;
+  id: string;
 }
 
 /**
  * GET /api/templates/[id]
  * Get a single template by ID
+ * Requires authentication - users can only access their own templates
  */
-export async function GET(request: NextRequest, { params }: RouteParams) {
+export const GET = withAuth(async (request: NextRequest, context: AuthContext, params?: RouteParams) => {
   try {
-    const { id } = await params;
+    if (!params?.id) {
+      return createErrorResponse('ID is required', 400);
+    }
+    const { id } = params;
 
     // Rate limiting
-    const rateLimitResult = apiRateLimiter.check(`template-get-${id}`);
+    const rateLimitResult = apiRateLimiter.check(`template-get-${context.userId}-${id}`);
     if (!rateLimitResult.success) {
       const retryAfter = Math.ceil((rateLimitResult.resetAt - Date.now()) / 1000);
       return NextResponse.json(
@@ -31,9 +36,12 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     // Validate ID
     templateIdSchema.parse({ id });
 
-    // Get template with related campaigns
-    const template = await prisma.template.findUnique({
-      where: { id },
+    // Get template with related campaigns - MUST filter by userId (owner validation)
+    const template = await prisma.template.findFirst({
+      where: {
+        id,
+        userId: context.userId, // Owner validation
+      },
       include: {
         campaigns: {
           take: 20,
@@ -52,10 +60,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     });
 
     if (!template) {
-      return NextResponse.json(
-        { error: 'Template not found' },
-        { status: 404 }
-      );
+      return createErrorResponse('Template not found', 404);
     }
 
     return NextResponse.json({ data: template });
@@ -72,18 +77,22 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       { status: 500 }
     );
   }
-}
+}, { requiredPermission: 'templates:read' });
 
 /**
  * PUT /api/templates/[id]
  * Update an existing template
+ * Requires authentication - users can only update their own templates
  */
-export async function PUT(request: NextRequest, { params }: RouteParams) {
+export const PUT = withAuth(async (request: NextRequest, context: AuthContext, params?: RouteParams) => {
   try {
-    const { id } = await params;
+    if (!params?.id) {
+      return createErrorResponse('ID is required', 400);
+    }
+    const { id } = params;
 
     // Rate limiting
-    const rateLimitResult = apiRateLimiter.check(`template-update-${id}`);
+    const rateLimitResult = apiRateLimiter.check(`template-update-${context.userId}-${id}`);
     if (!rateLimitResult.success) {
       const retryAfter = Math.ceil((rateLimitResult.resetAt - Date.now()) / 1000);
       return NextResponse.json(
@@ -95,9 +104,12 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     // Validate ID
     templateIdSchema.parse({ id });
 
-    // Check if template exists and get full data for versioning
-    const existing = await prisma.template.findUnique({
-      where: { id },
+    // Check if template exists AND belongs to the user (owner validation)
+    const existing = await prisma.template.findFirst({
+      where: {
+        id,
+        userId: context.userId, // Owner validation
+      },
       select: {
         id: true,
         name: true,
@@ -110,20 +122,21 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     });
 
     if (!existing) {
-      return NextResponse.json(
-        { error: 'Template not found' },
-        { status: 404 }
-      );
+      return createErrorResponse('Template not found', 404);
     }
 
     // Parse and validate body
     const body = await request.json();
     const validated = updateTemplateSchema.parse(body);
 
-    // If name is being updated, check for duplicates
+    // If name is being updated, check for duplicates within user's templates
     if (validated.name && validated.name !== existing.name) {
       const nameExists = await prisma.template.findFirst({
-        where: { name: validated.name },
+        where: {
+          name: validated.name,
+          userId: context.userId, // Check only within user's templates
+          id: { not: id },
+        },
       });
       if (nameExists) {
         return NextResponse.json(
@@ -133,10 +146,14 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       }
     }
 
-    // If setting as default, unset other defaults
+    // If setting as default, unset other defaults for this user
     if (validated.isDefault === true) {
       await prisma.template.updateMany({
-        where: { isDefault: true, id: { not: id } },
+        where: {
+          isDefault: true,
+          id: { not: id },
+          userId: context.userId,
+        },
         data: { isDefault: false },
       });
     }
@@ -175,7 +192,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       category: template.category,
     };
 
-    await createVersion(id, oldData, newData, existing.userId ?? undefined);
+    await createVersion(id, oldData, newData, context.userId);
 
     return NextResponse.json({ data: template });
   } catch (error: unknown) {
@@ -197,18 +214,22 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       { status: 500 }
     );
   }
-}
+}, { requiredPermission: 'templates:write' });
 
 /**
  * DELETE /api/templates/[id]
  * Delete a template
+ * Requires authentication - users can only delete their own templates
  */
-export async function DELETE(request: NextRequest, { params }: RouteParams) {
+export const DELETE = withAuth(async (request: NextRequest, context: AuthContext, params?: RouteParams) => {
   try {
-    const { id } = await params;
+    if (!params?.id) {
+      return createErrorResponse('ID is required', 400);
+    }
+    const { id } = params;
 
     // Rate limiting
-    const rateLimitResult = apiRateLimiter.check(`template-delete-${id}`);
+    const rateLimitResult = apiRateLimiter.check(`template-delete-${context.userId}-${id}`);
     if (!rateLimitResult.success) {
       const retryAfter = Math.ceil((rateLimitResult.resetAt - Date.now()) / 1000);
       return NextResponse.json(
@@ -220,9 +241,12 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     // Validate ID
     templateIdSchema.parse({ id });
 
-    // Check if template exists and has associated campaigns
-    const existing = await prisma.template.findUnique({
-      where: { id },
+    // Check if template exists, belongs to user, and has associated campaigns (owner validation)
+    const existing = await prisma.template.findFirst({
+      where: {
+        id,
+        userId: context.userId, // Owner validation
+      },
       include: {
         _count: {
           select: { campaigns: true },
@@ -231,10 +255,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     });
 
     if (!existing) {
-      return NextResponse.json(
-        { error: 'Template not found' },
-        { status: 404 }
-      );
+      return createErrorResponse('Template not found', 404);
     }
 
     // Prevent deletion if template is used by campaigns
@@ -264,18 +285,22 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       { status: 500 }
     );
   }
-}
+}, { requiredPermission: 'templates:delete' });
 
 /**
  * POST /api/templates/[id]
  * Duplicate a template
+ * Requires authentication - users can only duplicate their own templates
  */
-export async function POST(request: NextRequest, { params }: RouteParams) {
+export const POST = withAuth(async (request: NextRequest, context: AuthContext, params?: RouteParams) => {
   try {
-    const { id } = await params;
+    if (!params?.id) {
+      return createErrorResponse('ID is required', 400);
+    }
+    const { id } = params;
 
     // Rate limiting
-    const rateLimitResult = apiRateLimiter.check(`template-duplicate-${id}`);
+    const rateLimitResult = apiRateLimiter.check(`template-duplicate-${context.userId}-${id}`);
     if (!rateLimitResult.success) {
       const retryAfter = Math.ceil((rateLimitResult.resetAt - Date.now()) / 1000);
       return NextResponse.json(
@@ -287,25 +312,28 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     // Validate ID
     templateIdSchema.parse({ id });
 
-    // Get original template
-    const original = await prisma.template.findUnique({
-      where: { id },
+    // Get original template - MUST belong to the user (owner validation)
+    const original = await prisma.template.findFirst({
+      where: {
+        id,
+        userId: context.userId, // Owner validation
+      },
     });
 
     if (!original) {
-      return NextResponse.json(
-        { error: 'Template not found' },
-        { status: 404 }
-      );
+      return createErrorResponse('Template not found', 404);
     }
 
     // Parse and validate body
     const body = await request.json();
     const validated = duplicateTemplateSchema.parse(body);
 
-    // Check if name already exists
+    // Check if name already exists for this user
     const nameExists = await prisma.template.findFirst({
-      where: { name: validated.name },
+      where: {
+        name: validated.name,
+        userId: context.userId, // Check only within user's templates
+      },
     });
     if (nameExists) {
       return NextResponse.json(
@@ -314,7 +342,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       );
     }
 
-    // Create duplicate (currentVersion is auto-managed by Prisma default)
+    // Create duplicate - associate with authenticated user
     const template = await prisma.template.create({
       data: {
         name: validated.name,
@@ -323,6 +351,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         thumbnail: original.thumbnail,
         category: original.category,
         isDefault: false, // Duplicates are never default
+        userId: context.userId, // Associate with authenticated user
       },
     });
 
@@ -333,7 +362,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       content: original.content,
       thumbnail: original.thumbnail,
       category: original.category,
-    }, template.userId ?? undefined);
+    }, context.userId);
 
     return NextResponse.json({ data: template }, { status: 201 });
   } catch (error: unknown) {
@@ -355,4 +384,4 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       { status: 500 }
     );
   }
-}
+}, { requiredPermission: 'templates:write' });

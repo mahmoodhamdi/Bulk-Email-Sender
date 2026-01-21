@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { ZodError } from 'zod';
 import { apiRateLimiter } from '@/lib/rate-limit';
+import { prisma } from '@/lib/db/prisma';
 import {
   getAutomation,
   updateAutomation,
@@ -10,21 +11,40 @@ import {
   archiveAutomation,
   updateAutomationSchema,
 } from '@/lib/automation';
+import { withAuth, createErrorResponse, AuthContext } from '@/lib/auth';
 
 interface RouteParams {
-  params: Promise<{ id: string }>;
+  id: string;
+}
+
+/**
+ * Helper function to validate automation ownership
+ */
+async function validateAutomationOwnership(automationId: string, userId: string): Promise<boolean> {
+  const automation = await prisma.automation.findFirst({
+    where: {
+      id: automationId,
+      userId: userId,
+    },
+    select: { id: true },
+  });
+  return automation !== null;
 }
 
 /**
  * GET /api/automations/[id]
  * Get automation details with stats
+ * Requires authentication - users can only access their own automations
  */
-export async function GET(request: NextRequest, { params }: RouteParams) {
+export const GET = withAuth(async (request: NextRequest, context: AuthContext, params?: RouteParams) => {
   try {
-    const { id } = await params;
+    if (!params?.id) {
+      return createErrorResponse('ID is required', 400);
+    }
+    const { id } = params;
 
     // Rate limiting
-    const rateLimitResult = apiRateLimiter.check(`automations-get-${id}`);
+    const rateLimitResult = apiRateLimiter.check(`automations-get-${context.userId}-${id}`);
     if (!rateLimitResult.success) {
       const retryAfter = Math.ceil((rateLimitResult.resetAt - Date.now()) / 1000);
       return NextResponse.json(
@@ -33,12 +53,15 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       );
     }
 
+    // Owner validation - check if automation belongs to the user
+    const isOwner = await validateAutomationOwnership(id, context.userId);
+    if (!isOwner) {
+      return createErrorResponse('Automation not found', 404);
+    }
+
     const automation = await getAutomation(id);
     if (!automation) {
-      return NextResponse.json(
-        { error: 'Automation not found' },
-        { status: 404 }
-      );
+      return createErrorResponse('Automation not found', 404);
     }
 
     return NextResponse.json({ data: automation });
@@ -49,24 +72,34 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       { status: 500 }
     );
   }
-}
+}, { requiredPermission: 'automations:read' });
 
 /**
  * PATCH /api/automations/[id]
  * Update automation or perform actions (activate, pause, archive)
+ * Requires authentication - users can only update their own automations
  */
-export async function PATCH(request: NextRequest, { params }: RouteParams) {
+export const PATCH = withAuth(async (request: NextRequest, context: AuthContext, params?: RouteParams) => {
   try {
-    const { id } = await params;
+    if (!params?.id) {
+      return createErrorResponse('ID is required', 400);
+    }
+    const { id } = params;
 
     // Rate limiting
-    const rateLimitResult = apiRateLimiter.check(`automations-update-${id}`);
+    const rateLimitResult = apiRateLimiter.check(`automations-update-${context.userId}-${id}`);
     if (!rateLimitResult.success) {
       const retryAfter = Math.ceil((rateLimitResult.resetAt - Date.now()) / 1000);
       return NextResponse.json(
         { error: 'Too many requests', retryAfter },
         { status: 429 }
       );
+    }
+
+    // Owner validation - check if automation belongs to the user
+    const isOwner = await validateAutomationOwnership(id, context.userId);
+    if (!isOwner) {
+      return createErrorResponse('Automation not found', 404);
     }
 
     const body = await request.json();
@@ -133,24 +166,34 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       { status: 500 }
     );
   }
-}
+}, { requiredPermission: 'automations:write' });
 
 /**
  * DELETE /api/automations/[id]
  * Delete an automation
+ * Requires authentication - users can only delete their own automations
  */
-export async function DELETE(request: NextRequest, { params }: RouteParams) {
+export const DELETE = withAuth(async (request: NextRequest, context: AuthContext, params?: RouteParams) => {
   try {
-    const { id } = await params;
+    if (!params?.id) {
+      return createErrorResponse('ID is required', 400);
+    }
+    const { id } = params;
 
     // Rate limiting
-    const rateLimitResult = apiRateLimiter.check(`automations-delete-${id}`);
+    const rateLimitResult = apiRateLimiter.check(`automations-delete-${context.userId}-${id}`);
     if (!rateLimitResult.success) {
       const retryAfter = Math.ceil((rateLimitResult.resetAt - Date.now()) / 1000);
       return NextResponse.json(
         { error: 'Too many requests', retryAfter },
         { status: 429 }
       );
+    }
+
+    // Owner validation - check if automation belongs to the user
+    const isOwner = await validateAutomationOwnership(id, context.userId);
+    if (!isOwner) {
+      return createErrorResponse('Automation not found', 404);
     }
 
     await deleteAutomation(id);
@@ -172,4 +215,4 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       { status: 500 }
     );
   }
-}
+}, { requiredPermission: 'automations:delete' });

@@ -3,10 +3,11 @@ import { prisma } from '@/lib/db/prisma';
 import { campaignIdSchema, addRecipientsSchema } from '@/lib/validations/campaign';
 import { apiRateLimiter } from '@/lib/rate-limit';
 import { generateShortId } from '@/lib/crypto';
+import { withAuth, createErrorResponse, AuthContext } from '@/lib/auth';
 import { ZodError, z } from 'zod';
 
 interface RouteParams {
-  params: Promise<{ id: string }>;
+  id: string;
 }
 
 // Validation schema for cursor-based pagination
@@ -23,30 +24,24 @@ const recipientQuerySchema = z.object({
 /**
  * GET /api/campaigns/[id]/recipients
  * List recipients with cursor-based pagination
+ * Requires authentication - users can only access their own campaign recipients
  *
  * Query parameters:
  * - cursor: The ID of the last item from the previous page (optional)
  * - limit: Number of items to return (default: 50, max: 100)
  * - status: Filter by recipient status (optional)
  * - direction: 'forward' (newer) or 'backward' (older) from cursor
- *
- * Response:
- * {
- *   data: Recipient[],
- *   pagination: {
- *     nextCursor: string | null,
- *     prevCursor: string | null,
- *     hasMore: boolean,
- *     total: number
- *   }
- * }
  */
-export async function GET(request: NextRequest, { params }: RouteParams) {
+export const GET = withAuth(async (request: NextRequest, context: AuthContext, params?: RouteParams) => {
   try {
-    const { id } = await params;
+    if (!params?.id) {
+      return createErrorResponse('Campaign ID is required', 400);
+    }
+
+    const { id } = params;
 
     // Rate limiting
-    const rateLimitResult = apiRateLimiter.check(`recipients-list-${id}`);
+    const rateLimitResult = apiRateLimiter.check(`recipients-list-${context.userId}-${id}`);
     if (!rateLimitResult.success) {
       const retryAfter = Math.ceil((rateLimitResult.resetAt - Date.now()) / 1000);
       return NextResponse.json(
@@ -58,17 +53,17 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     // Validate campaign ID
     campaignIdSchema.parse({ id });
 
-    // Verify campaign exists
-    const campaign = await prisma.campaign.findUnique({
-      where: { id },
+    // Verify campaign exists AND belongs to the user (owner validation)
+    const campaign = await prisma.campaign.findFirst({
+      where: {
+        id,
+        userId: context.userId, // Owner validation
+      },
       select: { id: true },
     });
 
     if (!campaign) {
-      return NextResponse.json(
-        { error: 'Campaign not found' },
-        { status: 404 }
-      );
+      return createErrorResponse('Campaign not found', 404);
     }
 
     // Parse query parameters
@@ -179,11 +174,12 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       { status: 500 }
     );
   }
-}
+}, { requiredPermission: 'campaigns:read' });
 
 /**
  * POST /api/campaigns/[id]/recipients
  * Add recipients to a campaign
+ * Requires authentication - users can only add recipients to their own campaigns
  *
  * Request body:
  * {
@@ -191,12 +187,16 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
  *   listIds?: string[]   // Optional: Import from contact lists
  * }
  */
-export async function POST(request: NextRequest, { params }: RouteParams) {
+export const POST = withAuth(async (request: NextRequest, context: AuthContext, params?: RouteParams) => {
   try {
-    const { id } = await params;
+    if (!params?.id) {
+      return createErrorResponse('Campaign ID is required', 400);
+    }
+
+    const { id } = params;
 
     // Rate limiting
-    const rateLimitResult = apiRateLimiter.check(`recipients-add-${id}`);
+    const rateLimitResult = apiRateLimiter.check(`recipients-add-${context.userId}-${id}`);
     if (!rateLimitResult.success) {
       const retryAfter = Math.ceil((rateLimitResult.resetAt - Date.now()) / 1000);
       return NextResponse.json(
@@ -208,24 +208,21 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     // Validate campaign ID
     campaignIdSchema.parse({ id });
 
-    // Verify campaign exists and is in DRAFT status
-    const campaign = await prisma.campaign.findUnique({
-      where: { id },
+    // Verify campaign exists, belongs to the user, and is in DRAFT status (owner validation)
+    const campaign = await prisma.campaign.findFirst({
+      where: {
+        id,
+        userId: context.userId, // Owner validation
+      },
       select: { id: true, status: true },
     });
 
     if (!campaign) {
-      return NextResponse.json(
-        { error: 'Campaign not found' },
-        { status: 404 }
-      );
+      return createErrorResponse('Campaign not found', 404);
     }
 
     if (campaign.status !== 'DRAFT' && campaign.status !== 'SCHEDULED') {
-      return NextResponse.json(
-        { error: 'Can only add recipients to draft or scheduled campaigns' },
-        { status: 400 }
-      );
+      return createErrorResponse('Can only add recipients to draft or scheduled campaigns', 400);
     }
 
     // Parse and validate body
@@ -237,14 +234,18 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     // Collect all emails to add
     let allEmails = [...emails];
 
-    // If listIds provided, get emails from contact lists
+    // If listIds provided, get emails from contact lists (only user's own lists)
     if (listIds && listIds.length > 0) {
       const contacts = await prisma.contact.findMany({
         where: {
+          userId: context.userId, // Only user's own contacts
           status: 'ACTIVE',
           listMembers: {
             some: {
               listId: { in: listIds },
+              list: {
+                userId: context.userId, // Only user's own lists
+              },
             },
           },
         },
@@ -322,4 +323,4 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       { status: 500 }
     );
   }
-}
+}, { requiredPermission: 'campaigns:write' });

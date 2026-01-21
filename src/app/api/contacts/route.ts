@@ -2,17 +2,19 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
 import { createContactSchema, listContactsSchema, bulkImportContactsSchema } from '@/lib/validations/contact';
 import { apiRateLimiter } from '@/lib/rate-limit';
+import { withAuth, AuthContext } from '@/lib/auth';
 import { ZodError } from 'zod';
 import { Prisma } from '@prisma/client';
 
 /**
  * GET /api/contacts
  * List contacts with pagination and filtering
+ * Requires authentication - users can only see their own contacts
  */
-export async function GET(request: NextRequest) {
+export const GET = withAuth(async (request: NextRequest, context: AuthContext) => {
   try {
     // Rate limiting
-    const rateLimitResult = apiRateLimiter.check('contacts-list');
+    const rateLimitResult = apiRateLimiter.check(`contacts-list-${context.userId}`);
     if (!rateLimitResult.success) {
       const retryAfter = Math.ceil((rateLimitResult.resetAt - Date.now()) / 1000);
       return NextResponse.json(
@@ -37,8 +39,10 @@ export async function GET(request: NextRequest) {
     const validated = listContactsSchema.parse(params);
     const { page, limit, status, search, tag, sortBy, sortOrder } = validated;
 
-    // Build where clause
-    const where: Prisma.ContactWhereInput = {};
+    // Build where clause - ALWAYS filter by userId for security
+    const where: Prisma.ContactWhereInput = {
+      userId: context.userId, // Owner filter - users can only see their own contacts
+    };
     if (status) {
       where.status = status;
     }
@@ -92,16 +96,17 @@ export async function GET(request: NextRequest) {
       { status: 500 }
     );
   }
-}
+}, { requiredPermission: 'contacts:read' });
 
 /**
  * POST /api/contacts
  * Create a new contact or bulk import contacts
+ * Requires authentication - contacts are associated with the authenticated user
  */
-export async function POST(request: NextRequest) {
+export const POST = withAuth(async (request: NextRequest, context: AuthContext) => {
   try {
     // Rate limiting
-    const rateLimitResult = apiRateLimiter.check('contacts-create');
+    const rateLimitResult = apiRateLimiter.check(`contacts-create-${context.userId}`);
     if (!rateLimitResult.success) {
       const retryAfter = Math.ceil((rateLimitResult.resetAt - Date.now()) / 1000);
       return NextResponse.json(
@@ -115,15 +120,18 @@ export async function POST(request: NextRequest) {
 
     // Check if this is a bulk import (has 'contacts' array)
     if (body.contacts && Array.isArray(body.contacts)) {
-      return handleBulkImport(body);
+      return handleBulkImport(body, context.userId);
     }
 
     // Single contact creation
     const validated = createContactSchema.parse(body);
 
-    // Check for existing contact (email must be unique per user, or globally if no user)
+    // Check for existing contact (email must be unique per user)
     const existing = await prisma.contact.findFirst({
-      where: { email: validated.email },
+      where: {
+        email: validated.email,
+        userId: context.userId, // Check only within user's contacts
+      },
     });
 
     if (existing) {
@@ -133,7 +141,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Create contact
+    // Create contact - associate with authenticated user
     const contact = await prisma.contact.create({
       data: {
         email: validated.email,
@@ -144,6 +152,7 @@ export async function POST(request: NextRequest) {
         customField2: validated.customField2,
         tags: validated.tags,
         status: validated.status,
+        userId: context.userId, // Associate with authenticated user
       },
     });
 
@@ -167,12 +176,12 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     );
   }
-}
+}, { requiredPermission: 'contacts:write' });
 
 /**
  * Handle bulk import of contacts with optimized batch operations
  */
-async function handleBulkImport(body: unknown) {
+async function handleBulkImport(body: unknown, userId: string) {
   try {
     const validated = bulkImportContactsSchema.parse(body);
     const { contacts, updateExisting, defaultTags } = validated;
@@ -187,9 +196,12 @@ async function handleBulkImport(body: unknown) {
     // Extract all unique emails from import data
     const importEmails = [...new Set(contacts.map(c => c.email.toLowerCase()))];
 
-    // Single query to find all existing contacts by email
+    // Single query to find all existing contacts by email for this user
     const existingContacts = await prisma.contact.findMany({
-      where: { email: { in: importEmails, mode: 'insensitive' } },
+      where: {
+        email: { in: importEmails, mode: 'insensitive' },
+        userId: userId, // Only check user's own contacts
+      },
       select: { id: true, email: true, firstName: true, lastName: true, company: true, customField1: true, customField2: true },
     });
 
@@ -227,6 +239,7 @@ async function handleBulkImport(body: unknown) {
         customField1: contactData.customField1,
         customField2: contactData.customField2,
         tags: [...new Set([...contactData.tags, ...(defaultTags || [])])],
+        userId: userId, // Associate with authenticated user
       }));
 
       try {
@@ -248,6 +261,7 @@ async function handleBulkImport(body: unknown) {
                 customField1: contactData.customField1,
                 customField2: contactData.customField2,
                 tags: [...new Set([...contactData.tags, ...(defaultTags || [])])],
+                userId: userId,
               },
             });
             results.created++;

@@ -1,32 +1,62 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { ZodError } from 'zod';
 import { apiRateLimiter } from '@/lib/rate-limit';
+import { prisma } from '@/lib/db/prisma';
 import {
   updateStep,
   removeStep,
   updateStepSchema,
 } from '@/lib/automation';
+import { withAuth, createErrorResponse, AuthContext } from '@/lib/auth';
 
 interface RouteParams {
-  params: Promise<{ id: string; stepId: string }>;
+  id: string;
+  stepId: string;
+}
+
+/**
+ * Helper function to validate automation ownership
+ */
+async function validateAutomationOwnership(automationId: string, userId: string): Promise<boolean> {
+  const automation = await prisma.automation.findFirst({
+    where: {
+      id: automationId,
+      userId: userId,
+    },
+    select: { id: true },
+  });
+  return automation !== null;
 }
 
 /**
  * PATCH /api/automations/[id]/steps/[stepId]
  * Update a step
+ * Requires authentication - users can only update steps in their own automations
  */
-export async function PATCH(request: NextRequest, { params }: RouteParams) {
+export const PATCH = withAuth(async (request: NextRequest, context: AuthContext, params?: RouteParams) => {
   try {
-    const { stepId } = await params;
+    if (!params?.id) {
+      return createErrorResponse('ID is required', 400);
+    }
+    if (!params?.stepId) {
+      return createErrorResponse('Step ID is required', 400);
+    }
+    const { id, stepId } = params;
 
     // Rate limiting
-    const rateLimitResult = apiRateLimiter.check(`automations-step-update-${stepId}`);
+    const rateLimitResult = apiRateLimiter.check(`automations-step-update-${context.userId}-${stepId}`);
     if (!rateLimitResult.success) {
       const retryAfter = Math.ceil((rateLimitResult.resetAt - Date.now()) / 1000);
       return NextResponse.json(
         { error: 'Too many requests', retryAfter },
         { status: 429 }
       );
+    }
+
+    // Owner validation - check if automation belongs to the user
+    const isOwner = await validateAutomationOwnership(id, context.userId);
+    if (!isOwner) {
+      return createErrorResponse('Automation not found', 404);
     }
 
     // Parse and validate body
@@ -70,24 +100,37 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       { status: 500 }
     );
   }
-}
+}, { requiredPermission: 'automations:write' });
 
 /**
  * DELETE /api/automations/[id]/steps/[stepId]
  * Remove a step from an automation
+ * Requires authentication - users can only remove steps from their own automations
  */
-export async function DELETE(request: NextRequest, { params }: RouteParams) {
+export const DELETE = withAuth(async (request: NextRequest, context: AuthContext, params?: RouteParams) => {
   try {
-    const { stepId } = await params;
+    if (!params?.id) {
+      return createErrorResponse('ID is required', 400);
+    }
+    if (!params?.stepId) {
+      return createErrorResponse('Step ID is required', 400);
+    }
+    const { id, stepId } = params;
 
     // Rate limiting
-    const rateLimitResult = apiRateLimiter.check(`automations-step-delete-${stepId}`);
+    const rateLimitResult = apiRateLimiter.check(`automations-step-delete-${context.userId}-${stepId}`);
     if (!rateLimitResult.success) {
       const retryAfter = Math.ceil((rateLimitResult.resetAt - Date.now()) / 1000);
       return NextResponse.json(
         { error: 'Too many requests', retryAfter },
         { status: 429 }
       );
+    }
+
+    // Owner validation - check if automation belongs to the user
+    const isOwner = await validateAutomationOwnership(id, context.userId);
+    if (!isOwner) {
+      return createErrorResponse('Automation not found', 404);
     }
 
     await removeStep(stepId);
@@ -117,4 +160,4 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       { status: 500 }
     );
   }
-}
+}, { requiredPermission: 'automations:delete' });

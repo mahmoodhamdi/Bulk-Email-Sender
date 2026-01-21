@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createEmailSender } from '@/lib/email/sender';
 import { replaceMergeTags } from '@/lib/email/merge-tags';
-import { emailSendRateLimiter } from '@/lib/rate-limit';
+import { apiRateLimiter } from '@/lib/rate-limit';
 import { isValidEmail } from '@/lib/utils';
+import { withAuth, AuthContext } from '@/lib/auth';
 
 export interface TestEmailRequest {
   to: string[];
@@ -41,11 +42,20 @@ export interface TestEmailResponse {
   totalFailed: number;
 }
 
-export async function POST(request: NextRequest) {
-  // Apply rate limiting (10 requests per minute)
-  const rateLimitResponse = await emailSendRateLimiter.middleware(request);
-  if (rateLimitResponse) {
-    return rateLimitResponse;
+/**
+ * POST /api/email/test
+ * Send test emails
+ * Requires authentication - prevents unauthorized email sending
+ */
+export const POST = withAuth(async (request: NextRequest, context: AuthContext) => {
+  // Apply rate limiting (10 requests per minute per user)
+  const rateLimitResult = apiRateLimiter.check(`email-test-${context.userId}`);
+  if (!rateLimitResult.success) {
+    const retryAfter = Math.ceil((rateLimitResult.resetAt - Date.now()) / 1000);
+    return NextResponse.json(
+      { error: 'Too many requests', retryAfter },
+      { status: 429 }
+    );
   }
 
   try {
@@ -179,4 +189,4 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     );
   }
-}
+}, { requiredPermission: 'campaigns:write' });

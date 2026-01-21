@@ -5,21 +5,41 @@ import { versionNumberSchema } from '@/lib/validations/template-version';
 import { apiRateLimiter } from '@/lib/rate-limit';
 import { getVersion } from '@/lib/template';
 import { ZodError } from 'zod';
+import { withAuth, createErrorResponse, AuthContext } from '@/lib/auth';
 
 interface RouteParams {
-  params: Promise<{ id: string; version: string }>;
+  id: string;
+  version: string;
+}
+
+/**
+ * Helper function to validate template ownership
+ */
+async function validateTemplateOwnership(templateId: string, userId: string): Promise<boolean> {
+  const template = await prisma.template.findFirst({
+    where: {
+      id: templateId,
+      userId: userId,
+    },
+    select: { id: true },
+  });
+  return template !== null;
 }
 
 /**
  * GET /api/templates/[id]/versions/[version]
  * Get a specific version of a template
+ * Requires authentication - users can only view versions of their own templates
  */
-export async function GET(request: NextRequest, { params }: RouteParams) {
+export const GET = withAuth(async (request: NextRequest, context: AuthContext, params?: RouteParams) => {
   try {
-    const { id, version: versionStr } = await params;
+    if (!params?.id || !params?.version) {
+      return createErrorResponse('ID and version are required', 400);
+    }
+    const { id, version: versionStr } = params;
 
     // Rate limiting
-    const rateLimitResult = apiRateLimiter.check(`template-version-${id}-${versionStr}`);
+    const rateLimitResult = apiRateLimiter.check(`template-version-${context.userId}-${id}-${versionStr}`);
     if (!rateLimitResult.success) {
       const retryAfter = Math.ceil((rateLimitResult.resetAt - Date.now()) / 1000);
       return NextResponse.json(
@@ -32,27 +52,17 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     templateIdSchema.parse({ id });
     const { version } = versionNumberSchema.parse({ version: versionStr });
 
-    // Check if template exists
-    const template = await prisma.template.findUnique({
-      where: { id },
-      select: { id: true },
-    });
-
-    if (!template) {
-      return NextResponse.json(
-        { error: 'Template not found' },
-        { status: 404 }
-      );
+    // Owner validation - check if template belongs to the user
+    const isOwner = await validateTemplateOwnership(id, context.userId);
+    if (!isOwner) {
+      return createErrorResponse('Template not found', 404);
     }
 
     // Get version
     const versionData = await getVersion(id, version);
 
     if (!versionData) {
-      return NextResponse.json(
-        { error: 'Version not found' },
-        { status: 404 }
-      );
+      return createErrorResponse('Version not found', 404);
     }
 
     return NextResponse.json({ data: versionData });
@@ -69,4 +79,4 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       { status: 500 }
     );
   }
-}
+}, { requiredPermission: 'templates:read' });

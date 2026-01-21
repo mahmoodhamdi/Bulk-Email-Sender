@@ -2,22 +2,27 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
 import { updateContactSchema, contactIdSchema } from '@/lib/validations/contact';
 import { apiRateLimiter } from '@/lib/rate-limit';
+import { withAuth, createErrorResponse, AuthContext } from '@/lib/auth';
 import { ZodError } from 'zod';
 
 interface RouteParams {
-  params: Promise<{ id: string }>;
+  id: string;
 }
 
 /**
  * GET /api/contacts/[id]
  * Get a single contact by ID
+ * Requires authentication - users can only access their own contacts
  */
-export async function GET(request: NextRequest, { params }: RouteParams) {
+export const GET = withAuth(async (request: NextRequest, context: AuthContext, params?: RouteParams) => {
   try {
-    const { id } = await params;
+    if (!params?.id) {
+      return createErrorResponse('ID is required', 400);
+    }
+    const { id } = params;
 
     // Rate limiting
-    const rateLimitResult = apiRateLimiter.check(`contact-get-${id}`);
+    const rateLimitResult = apiRateLimiter.check(`contact-get-${context.userId}-${id}`);
     if (!rateLimitResult.success) {
       const retryAfter = Math.ceil((rateLimitResult.resetAt - Date.now()) / 1000);
       return NextResponse.json(
@@ -29,9 +34,12 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     // Validate ID
     contactIdSchema.parse({ id });
 
-    // Get contact with related data
-    const contact = await prisma.contact.findUnique({
-      where: { id },
+    // Get contact with related data - MUST filter by userId (owner validation)
+    const contact = await prisma.contact.findFirst({
+      where: {
+        id,
+        userId: context.userId, // Owner validation
+      },
       include: {
         listMembers: {
           include: {
@@ -62,10 +70,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     });
 
     if (!contact) {
-      return NextResponse.json(
-        { error: 'Contact not found' },
-        { status: 404 }
-      );
+      return createErrorResponse('Contact not found', 404);
     }
 
     return NextResponse.json({ data: contact });
@@ -82,18 +87,22 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       { status: 500 }
     );
   }
-}
+}, { requiredPermission: 'contacts:read' });
 
 /**
  * PUT /api/contacts/[id]
  * Update an existing contact
+ * Requires authentication - users can only update their own contacts
  */
-export async function PUT(request: NextRequest, { params }: RouteParams) {
+export const PUT = withAuth(async (request: NextRequest, context: AuthContext, params?: RouteParams) => {
   try {
-    const { id } = await params;
+    if (!params?.id) {
+      return createErrorResponse('ID is required', 400);
+    }
+    const { id } = params;
 
     // Rate limiting
-    const rateLimitResult = apiRateLimiter.check(`contact-update-${id}`);
+    const rateLimitResult = apiRateLimiter.check(`contact-update-${context.userId}-${id}`);
     if (!rateLimitResult.success) {
       const retryAfter = Math.ceil((rateLimitResult.resetAt - Date.now()) / 1000);
       return NextResponse.json(
@@ -105,17 +114,17 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     // Validate ID
     contactIdSchema.parse({ id });
 
-    // Check if contact exists
-    const existing = await prisma.contact.findUnique({
-      where: { id },
+    // Check if contact exists AND belongs to the user (owner validation)
+    const existing = await prisma.contact.findFirst({
+      where: {
+        id,
+        userId: context.userId, // Owner validation
+      },
       select: { id: true, email: true, userId: true },
     });
 
     if (!existing) {
-      return NextResponse.json(
-        { error: 'Contact not found' },
-        { status: 404 }
-      );
+      return createErrorResponse('Contact not found', 404);
     }
 
     // Parse and validate body
@@ -127,7 +136,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       const emailExists = await prisma.contact.findFirst({
         where: {
           email: validated.email,
-          userId: existing.userId,
+          userId: context.userId, // Check only within user's contacts
           id: { not: id },
         },
       });
@@ -184,18 +193,22 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       { status: 500 }
     );
   }
-}
+}, { requiredPermission: 'contacts:write' });
 
 /**
  * DELETE /api/contacts/[id]
  * Delete a contact
+ * Requires authentication - users can only delete their own contacts
  */
-export async function DELETE(request: NextRequest, { params }: RouteParams) {
+export const DELETE = withAuth(async (request: NextRequest, context: AuthContext, params?: RouteParams) => {
   try {
-    const { id } = await params;
+    if (!params?.id) {
+      return createErrorResponse('ID is required', 400);
+    }
+    const { id } = params;
 
     // Rate limiting
-    const rateLimitResult = apiRateLimiter.check(`contact-delete-${id}`);
+    const rateLimitResult = apiRateLimiter.check(`contact-delete-${context.userId}-${id}`);
     if (!rateLimitResult.success) {
       const retryAfter = Math.ceil((rateLimitResult.resetAt - Date.now()) / 1000);
       return NextResponse.json(
@@ -207,17 +220,17 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     // Validate ID
     contactIdSchema.parse({ id });
 
-    // Check if contact exists
-    const existing = await prisma.contact.findUnique({
-      where: { id },
+    // Check if contact exists AND belongs to the user (owner validation)
+    const existing = await prisma.contact.findFirst({
+      where: {
+        id,
+        userId: context.userId, // Owner validation
+      },
       select: { id: true },
     });
 
     if (!existing) {
-      return NextResponse.json(
-        { error: 'Contact not found' },
-        { status: 404 }
-      );
+      return createErrorResponse('Contact not found', 404);
     }
 
     // Delete contact (cascades to list memberships)
@@ -239,4 +252,4 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       { status: 500 }
     );
   }
-}
+}, { requiredPermission: 'contacts:delete' });

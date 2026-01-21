@@ -1,15 +1,17 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { apiRateLimiter } from '@/lib/rate-limit';
 import { WEBHOOK_EVENTS, WEBHOOK_EVENT_DETAILS } from '@/lib/webhook';
+import { withAuth, AuthContext } from '@/lib/auth';
 
 /**
  * GET /api/webhooks/events
  * List all available webhook events
+ * Requires authentication - prevents information disclosure
  */
-export async function GET() {
+export const GET = withAuth(async (request: NextRequest, context: AuthContext) => {
   try {
     // Rate limiting
-    const rateLimitResult = apiRateLimiter.check('webhooks-events');
+    const rateLimitResult = apiRateLimiter.check(`webhooks-events-${context.userId}`);
     if (!rateLimitResult.success) {
       const retryAfter = Math.ceil((rateLimitResult.resetAt - Date.now()) / 1000);
       return NextResponse.json(
@@ -44,4 +46,4 @@ export async function GET() {
       { status: 500 }
     );
   }
-}
+}, { requiredPermission: 'webhooks:read' });
