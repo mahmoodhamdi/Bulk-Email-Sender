@@ -1,7 +1,10 @@
 {
   "permissions": {
     "allow": [
-      "Bash(npm run dev:*)"
+      "Bash(npm run dev:*)",
+      "Bash(git add:*)",
+      "Bash(git commit -m \"$\\(cat <<''EOF''\ndocs: streamline CLAUDE.md for better Claude Code guidance\n\n- Add npm run worker:dev to development commands\n- Consolidate directory structure documentation\n- Reduce redundant API route listings \\(discoverable from code\\)\n- Simplify environment variables with grouped categories\n- Keep essential code examples for auth, webhook, and payment patterns\n- Reference .env.example for complete configuration list\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(git push:*)"
     ]
   }
 }

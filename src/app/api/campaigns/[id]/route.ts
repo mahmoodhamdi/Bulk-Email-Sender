@@ -3,22 +3,27 @@ import { prisma } from '@/lib/db/prisma';
 import { updateCampaignSchema, campaignIdSchema } from '@/lib/validations/campaign';
 import { apiRateLimiter } from '@/lib/rate-limit';
 import { sanitizeEmailHtml } from '@/lib/sanitize-server';
+import { withAuth, createErrorResponse, AuthContext } from '@/lib/auth';
 import { ZodError } from 'zod';
 
 interface RouteParams {
-  params: Promise<{ id: string }>;
+  id: string;
 }
 
 /**
  * GET /api/campaigns/[id]
  * Get a single campaign by ID
+ * Requires authentication - users can only access their own campaigns
  */
-export async function GET(request: NextRequest, { params }: RouteParams) {
+export const GET = withAuth(async (request: NextRequest, context: AuthContext, params?: RouteParams) => {
   try {
-    const { id } = await params;
-    
+    if (!params?.id) {
+      return createErrorResponse('Campaign ID is required', 400);
+    }
+    const { id } = params;
+
     // Rate limiting
-    const rateLimitResult = apiRateLimiter.check(`campaign-get-${id}`);
+    const rateLimitResult = apiRateLimiter.check(`campaign-get-${context.userId}-${id}`);
     if (!rateLimitResult.success) {
       const retryAfter = Math.ceil((rateLimitResult.resetAt - Date.now()) / 1000);
       return NextResponse.json(
@@ -30,9 +35,12 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     // Validate ID
     campaignIdSchema.parse({ id });
 
-    // Get campaign
-    const campaign = await prisma.campaign.findUnique({
-      where: { id },
+    // Get campaign - MUST filter by userId for security (owner validation)
+    const campaign = await prisma.campaign.findFirst({
+      where: {
+        id,
+        userId: context.userId, // Owner validation - users can only access their own campaigns
+      },
       include: {
         template: {
           select: { id: true, name: true, content: true },
@@ -56,10 +64,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     });
 
     if (!campaign) {
-      return NextResponse.json(
-        { error: 'Campaign not found' },
-        { status: 404 }
-      );
+      return createErrorResponse('Campaign not found', 404);
     }
 
     return NextResponse.json({ data: campaign });
@@ -76,18 +81,22 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       { status: 500 }
     );
   }
-}
+}, { requiredPermission: 'campaigns:read' });
 
 /**
  * PUT /api/campaigns/[id]
  * Update an existing campaign
+ * Requires authentication - users can only update their own campaigns
  */
-export async function PUT(request: NextRequest, { params }: RouteParams) {
+export const PUT = withAuth(async (request: NextRequest, context: AuthContext, params?: RouteParams) => {
   try {
-    const { id } = await params;
-    
+    if (!params?.id) {
+      return createErrorResponse('Campaign ID is required', 400);
+    }
+    const { id } = params;
+
     // Rate limiting
-    const rateLimitResult = apiRateLimiter.check(`campaign-update-${id}`);
+    const rateLimitResult = apiRateLimiter.check(`campaign-update-${context.userId}-${id}`);
     if (!rateLimitResult.success) {
       const retryAfter = Math.ceil((rateLimitResult.resetAt - Date.now()) / 1000);
       return NextResponse.json(
@@ -99,17 +108,17 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     // Validate ID
     campaignIdSchema.parse({ id });
 
-    // Check if campaign exists
-    const existing = await prisma.campaign.findUnique({
-      where: { id },
+    // Check if campaign exists AND belongs to the user (owner validation)
+    const existing = await prisma.campaign.findFirst({
+      where: {
+        id,
+        userId: context.userId, // Owner validation
+      },
       select: { id: true, status: true },
     });
 
     if (!existing) {
-      return NextResponse.json(
-        { error: 'Campaign not found' },
-        { status: 404 }
-      );
+      return createErrorResponse('Campaign not found', 404);
     }
 
     // Don't allow updating campaigns that are sending or completed
@@ -173,18 +182,22 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       { status: 500 }
     );
   }
-}
+}, { requiredPermission: 'campaigns:write' });
 
 /**
  * DELETE /api/campaigns/[id]
  * Delete a campaign
+ * Requires authentication - users can only delete their own campaigns
  */
-export async function DELETE(request: NextRequest, { params }: RouteParams) {
+export const DELETE = withAuth(async (request: NextRequest, context: AuthContext, params?: RouteParams) => {
   try {
-    const { id } = await params;
-    
+    if (!params?.id) {
+      return createErrorResponse('Campaign ID is required', 400);
+    }
+    const { id } = params;
+
     // Rate limiting
-    const rateLimitResult = apiRateLimiter.check(`campaign-delete-${id}`);
+    const rateLimitResult = apiRateLimiter.check(`campaign-delete-${context.userId}-${id}`);
     if (!rateLimitResult.success) {
       const retryAfter = Math.ceil((rateLimitResult.resetAt - Date.now()) / 1000);
       return NextResponse.json(
@@ -196,17 +209,17 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     // Validate ID
     campaignIdSchema.parse({ id });
 
-    // Check if campaign exists
-    const existing = await prisma.campaign.findUnique({
-      where: { id },
+    // Check if campaign exists AND belongs to the user (owner validation)
+    const existing = await prisma.campaign.findFirst({
+      where: {
+        id,
+        userId: context.userId, // Owner validation
+      },
       select: { id: true, status: true },
     });
 
     if (!existing) {
-      return NextResponse.json(
-        { error: 'Campaign not found' },
-        { status: 404 }
-      );
+      return createErrorResponse('Campaign not found', 404);
     }
 
     // Don't allow deleting campaigns that are currently sending
@@ -236,4 +249,4 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       { status: 500 }
     );
   }
-}
+}, { requiredPermission: 'campaigns:delete' });

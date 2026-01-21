@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { ZodError } from 'zod';
 import { apiRateLimiter } from '@/lib/rate-limit';
+import { prisma } from '@/lib/db/prisma';
 import {
   getABTest,
   updateABTest,
@@ -16,21 +17,40 @@ import {
   addVariantSchema,
   updateVariantSchema,
 } from '@/lib/ab-test';
+import { withAuth, createErrorResponse, AuthContext } from '@/lib/auth';
 
 interface RouteParams {
-  params: Promise<{ id: string }>;
+  id: string;
+}
+
+/**
+ * Helper function to validate A/B test ownership
+ */
+async function validateABTestOwnership(testId: string, userId: string): Promise<boolean> {
+  const test = await prisma.aBTest.findFirst({
+    where: {
+      id: testId,
+      userId: userId,
+    },
+    select: { id: true },
+  });
+  return test !== null;
 }
 
 /**
  * GET /api/ab-tests/[id]
  * Get A/B test details with stats
+ * Requires authentication - users can only access their own tests
  */
-export async function GET(request: NextRequest, { params }: RouteParams) {
+export const GET = withAuth(async (request: NextRequest, context: AuthContext, params?: RouteParams) => {
   try {
-    const { id } = await params;
+    if (!params?.id) {
+      return createErrorResponse('ID is required', 400);
+    }
+    const { id } = params;
 
     // Rate limiting
-    const rateLimitResult = apiRateLimiter.check(`ab-tests-get-${id}`);
+    const rateLimitResult = apiRateLimiter.check(`ab-tests-get-${context.userId}-${id}`);
     if (!rateLimitResult.success) {
       const retryAfter = Math.ceil((rateLimitResult.resetAt - Date.now()) / 1000);
       return NextResponse.json(
@@ -39,12 +59,15 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       );
     }
 
+    // Owner validation - check if test belongs to the user
+    const isOwner = await validateABTestOwnership(id, context.userId);
+    if (!isOwner) {
+      return createErrorResponse('A/B test not found', 404);
+    }
+
     const abTest = await getABTest(id);
     if (!abTest) {
-      return NextResponse.json(
-        { error: 'A/B test not found' },
-        { status: 404 }
-      );
+      return createErrorResponse('A/B test not found', 404);
     }
 
     return NextResponse.json({ data: abTest });
@@ -55,24 +78,34 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       { status: 500 }
     );
   }
-}
+}, { requiredPermission: 'ab-tests:read' });
 
 /**
  * PATCH /api/ab-tests/[id]
  * Update A/B test or perform actions (start, select-winner, cancel, add-variant, etc.)
+ * Requires authentication - users can only update their own tests
  */
-export async function PATCH(request: NextRequest, { params }: RouteParams) {
+export const PATCH = withAuth(async (request: NextRequest, context: AuthContext, params?: RouteParams) => {
   try {
-    const { id } = await params;
+    if (!params?.id) {
+      return createErrorResponse('ID is required', 400);
+    }
+    const { id } = params;
 
     // Rate limiting
-    const rateLimitResult = apiRateLimiter.check(`ab-tests-update-${id}`);
+    const rateLimitResult = apiRateLimiter.check(`ab-tests-update-${context.userId}-${id}`);
     if (!rateLimitResult.success) {
       const retryAfter = Math.ceil((rateLimitResult.resetAt - Date.now()) / 1000);
       return NextResponse.json(
         { error: 'Too many requests', retryAfter },
         { status: 429 }
       );
+    }
+
+    // Owner validation - check if test belongs to the user
+    const isOwner = await validateABTestOwnership(id, context.userId);
+    if (!isOwner) {
+      return createErrorResponse('A/B test not found', 404);
     }
 
     const body = await request.json();
@@ -187,24 +220,34 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       { status: 500 }
     );
   }
-}
+}, { requiredPermission: 'ab-tests:write' });
 
 /**
  * DELETE /api/ab-tests/[id]
  * Delete an A/B test
+ * Requires authentication - users can only delete their own tests
  */
-export async function DELETE(request: NextRequest, { params }: RouteParams) {
+export const DELETE = withAuth(async (request: NextRequest, context: AuthContext, params?: RouteParams) => {
   try {
-    const { id } = await params;
+    if (!params?.id) {
+      return createErrorResponse('ID is required', 400);
+    }
+    const { id } = params;
 
     // Rate limiting
-    const rateLimitResult = apiRateLimiter.check(`ab-tests-delete-${id}`);
+    const rateLimitResult = apiRateLimiter.check(`ab-tests-delete-${context.userId}-${id}`);
     if (!rateLimitResult.success) {
       const retryAfter = Math.ceil((rateLimitResult.resetAt - Date.now()) / 1000);
       return NextResponse.json(
         { error: 'Too many requests', retryAfter },
         { status: 429 }
       );
+    }
+
+    // Owner validation - check if test belongs to the user
+    const isOwner = await validateABTestOwnership(id, context.userId);
+    if (!isOwner) {
+      return createErrorResponse('A/B test not found', 404);
     }
 
     await deleteABTest(id);
@@ -226,4 +269,4 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       { status: 500 }
     );
   }
-}
+}, { requiredPermission: 'ab-tests:delete' });

@@ -1,32 +1,58 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { ZodError, z } from 'zod';
 import { apiRateLimiter } from '@/lib/rate-limit';
+import { prisma } from '@/lib/db/prisma';
 import {
   addStep,
   reorderSteps,
   createStepSchema,
 } from '@/lib/automation';
+import { withAuth, createErrorResponse, AuthContext } from '@/lib/auth';
 
 interface RouteParams {
-  params: Promise<{ id: string }>;
+  id: string;
+}
+
+/**
+ * Helper function to validate automation ownership
+ */
+async function validateAutomationOwnership(automationId: string, userId: string): Promise<boolean> {
+  const automation = await prisma.automation.findFirst({
+    where: {
+      id: automationId,
+      userId: userId,
+    },
+    select: { id: true },
+  });
+  return automation !== null;
 }
 
 /**
  * POST /api/automations/[id]/steps
  * Add a step to an automation
+ * Requires authentication - users can only add steps to their own automations
  */
-export async function POST(request: NextRequest, { params }: RouteParams) {
+export const POST = withAuth(async (request: NextRequest, context: AuthContext, params?: RouteParams) => {
   try {
-    const { id } = await params;
+    if (!params?.id) {
+      return createErrorResponse('ID is required', 400);
+    }
+    const { id } = params;
 
     // Rate limiting
-    const rateLimitResult = apiRateLimiter.check(`automations-steps-${id}`);
+    const rateLimitResult = apiRateLimiter.check(`automations-steps-${context.userId}-${id}`);
     if (!rateLimitResult.success) {
       const retryAfter = Math.ceil((rateLimitResult.resetAt - Date.now()) / 1000);
       return NextResponse.json(
         { error: 'Too many requests', retryAfter },
         { status: 429 }
       );
+    }
+
+    // Owner validation - check if automation belongs to the user
+    const isOwner = await validateAutomationOwnership(id, context.userId);
+    if (!isOwner) {
+      return createErrorResponse('Automation not found', 404);
     }
 
     // Parse and validate body
@@ -70,24 +96,34 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       { status: 500 }
     );
   }
-}
+}, { requiredPermission: 'automations:write' });
 
 /**
  * PUT /api/automations/[id]/steps
  * Reorder steps in an automation
+ * Requires authentication - users can only reorder steps in their own automations
  */
-export async function PUT(request: NextRequest, { params }: RouteParams) {
+export const PUT = withAuth(async (request: NextRequest, context: AuthContext, params?: RouteParams) => {
   try {
-    const { id } = await params;
+    if (!params?.id) {
+      return createErrorResponse('ID is required', 400);
+    }
+    const { id } = params;
 
     // Rate limiting
-    const rateLimitResult = apiRateLimiter.check(`automations-steps-reorder-${id}`);
+    const rateLimitResult = apiRateLimiter.check(`automations-steps-reorder-${context.userId}-${id}`);
     if (!rateLimitResult.success) {
       const retryAfter = Math.ceil((rateLimitResult.resetAt - Date.now()) / 1000);
       return NextResponse.json(
         { error: 'Too many requests', retryAfter },
         { status: 429 }
       );
+    }
+
+    // Owner validation - check if automation belongs to the user
+    const isOwner = await validateAutomationOwnership(id, context.userId);
+    if (!isOwner) {
+      return createErrorResponse('Automation not found', 404);
     }
 
     // Parse and validate body
@@ -134,4 +170,4 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       { status: 500 }
     );
   }
-}
+}, { requiredPermission: 'automations:write' });

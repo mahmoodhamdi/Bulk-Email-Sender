@@ -5,21 +5,44 @@ import { versionNumberSchema, revertVersionSchema } from '@/lib/validations/temp
 import { apiRateLimiter } from '@/lib/rate-limit';
 import { revertToVersion, getVersion } from '@/lib/template';
 import { ZodError } from 'zod';
+import { withAuth, createErrorResponse, AuthContext } from '@/lib/auth';
 
 interface RouteParams {
-  params: Promise<{ id: string; version: string }>;
+  id: string;
+  version: string;
+}
+
+/**
+ * Helper function to validate template ownership
+ */
+async function validateTemplateOwnership(templateId: string, userId: string): Promise<{ isOwner: boolean; currentVersion?: number }> {
+  const template = await prisma.template.findFirst({
+    where: {
+      id: templateId,
+      userId: userId,
+    },
+    select: { id: true, currentVersion: true },
+  });
+  return {
+    isOwner: template !== null,
+    currentVersion: template?.currentVersion,
+  };
 }
 
 /**
  * POST /api/templates/[id]/versions/[version]/revert
  * Revert template to a specific version
+ * Requires authentication - users can only revert their own templates
  */
-export async function POST(request: NextRequest, { params }: RouteParams) {
+export const POST = withAuth(async (request: NextRequest, context: AuthContext, params?: RouteParams) => {
   try {
-    const { id, version: versionStr } = await params;
+    if (!params?.id || !params?.version) {
+      return createErrorResponse('Template ID and version are required', 400);
+    }
+    const { id, version: versionStr } = params;
 
     // Rate limiting
-    const rateLimitResult = apiRateLimiter.check(`template-revert-${id}`);
+    const rateLimitResult = apiRateLimiter.check(`template-revert-${context.userId}-${id}`);
     if (!rateLimitResult.success) {
       const retryAfter = Math.ceil((rateLimitResult.resetAt - Date.now()) / 1000);
       return NextResponse.json(
@@ -32,30 +55,20 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     templateIdSchema.parse({ id });
     const { version } = versionNumberSchema.parse({ version: versionStr });
 
-    // Check if template exists
-    const template = await prisma.template.findUnique({
-      where: { id },
-      select: { id: true, currentVersion: true, userId: true },
-    });
-
-    if (!template) {
-      return NextResponse.json(
-        { error: 'Template not found' },
-        { status: 404 }
-      );
+    // Owner validation - check if template belongs to the user
+    const { isOwner, currentVersion } = await validateTemplateOwnership(id, context.userId);
+    if (!isOwner) {
+      return createErrorResponse('Template not found', 404);
     }
 
     // Check if target version exists
     const targetVersion = await getVersion(id, version);
     if (!targetVersion) {
-      return NextResponse.json(
-        { error: 'Version not found' },
-        { status: 404 }
-      );
+      return createErrorResponse('Version not found', 404);
     }
 
     // Cannot revert to current version
-    if (version === template.currentVersion) {
+    if (version === currentVersion) {
       return NextResponse.json(
         { error: 'Cannot revert to the current version' },
         { status: 400 }
@@ -72,11 +85,11 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       // Body is optional, ignore parsing errors
     }
 
-    // Perform revert
+    // Perform revert - use authenticated user ID
     const result = await revertToVersion(
       id,
       version,
-      template.userId ?? undefined,
+      context.userId,
       changeSummary
     );
 
@@ -117,4 +130,4 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       { status: 500 }
     );
   }
-}
+}, { requiredPermission: 'templates:write' });

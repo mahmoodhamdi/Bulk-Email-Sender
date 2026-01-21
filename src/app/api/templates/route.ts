@@ -4,17 +4,19 @@ import { createTemplateSchema, listTemplatesSchema } from '@/lib/validations/tem
 import { apiRateLimiter } from '@/lib/rate-limit';
 import { createInitialVersion } from '@/lib/template';
 import { sanitizeEmailHtml } from '@/lib/sanitize-server';
+import { withAuth, AuthContext } from '@/lib/auth';
 import { ZodError } from 'zod';
 import { Prisma } from '@prisma/client';
 
 /**
  * GET /api/templates
  * List templates with pagination and filtering
+ * Requires authentication - users can only see their own templates
  */
-export async function GET(request: NextRequest) {
+export const GET = withAuth(async (request: NextRequest, context: AuthContext) => {
   try {
     // Rate limiting
-    const rateLimitResult = apiRateLimiter.check('templates-list');
+    const rateLimitResult = apiRateLimiter.check(`templates-list-${context.userId}`);
     if (!rateLimitResult.success) {
       const retryAfter = Math.ceil((rateLimitResult.resetAt - Date.now()) / 1000);
       return NextResponse.json(
@@ -39,8 +41,10 @@ export async function GET(request: NextRequest) {
     const validated = listTemplatesSchema.parse(params);
     const { page, limit, category, search, isDefault, sortBy, sortOrder } = validated;
 
-    // Build where clause
-    const where: Prisma.TemplateWhereInput = {};
+    // Build where clause - ALWAYS filter by userId for security
+    const where: Prisma.TemplateWhereInput = {
+      userId: context.userId, // Owner filter - users can only see their own templates
+    };
     if (category) {
       where.category = category;
     }
@@ -92,16 +96,17 @@ export async function GET(request: NextRequest) {
       { status: 500 }
     );
   }
-}
+}, { requiredPermission: 'templates:read' });
 
 /**
  * POST /api/templates
  * Create a new template
+ * Requires authentication - template is associated with the authenticated user
  */
-export async function POST(request: NextRequest) {
+export const POST = withAuth(async (request: NextRequest, context: AuthContext) => {
   try {
     // Rate limiting
-    const rateLimitResult = apiRateLimiter.check('templates-create');
+    const rateLimitResult = apiRateLimiter.check(`templates-create-${context.userId}`);
     if (!rateLimitResult.success) {
       const retryAfter = Math.ceil((rateLimitResult.resetAt - Date.now()) / 1000);
       return NextResponse.json(
@@ -114,9 +119,12 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const validated = createTemplateSchema.parse(body);
 
-    // Check for existing template with same name
+    // Check for existing template with same name for this user
     const existing = await prisma.template.findFirst({
-      where: { name: validated.name },
+      where: {
+        name: validated.name,
+        userId: context.userId, // Check only within user's templates
+      },
     });
 
     if (existing) {
@@ -126,10 +134,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // If setting as default, unset other defaults
+    // If setting as default, unset other defaults for this user
     if (validated.isDefault) {
       await prisma.template.updateMany({
-        where: { isDefault: true },
+        where: {
+          isDefault: true,
+          userId: context.userId,
+        },
         data: { isDefault: false },
       });
     }
@@ -137,7 +148,7 @@ export async function POST(request: NextRequest) {
     // Sanitize HTML content to prevent XSS attacks (preserves merge tags)
     const sanitizedContent = sanitizeEmailHtml(validated.content);
 
-    // Create template
+    // Create template - associate with authenticated user
     const template = await prisma.template.create({
       data: {
         name: validated.name,
@@ -147,6 +158,7 @@ export async function POST(request: NextRequest) {
         category: validated.category,
         isDefault: validated.isDefault,
         currentVersion: 1,
+        userId: context.userId, // Associate with authenticated user
       },
     });
 
@@ -157,7 +169,7 @@ export async function POST(request: NextRequest) {
       content: sanitizedContent,
       thumbnail: validated.thumbnail,
       category: validated.category,
-    }, template.userId ?? undefined);
+    }, context.userId);
 
     return NextResponse.json({ data: template }, { status: 201 });
   } catch (error: unknown) {
@@ -179,4 +191,4 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     );
   }
-}
+}, { requiredPermission: 'templates:write' });

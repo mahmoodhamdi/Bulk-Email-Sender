@@ -262,6 +262,7 @@ export function withAuth<T extends object>(
 
 /**
  * Helper to create error response
+ * @deprecated Use apiError from '@/lib/api-response' for standardized responses
  */
 export function createErrorResponse(error: string, status: number): NextResponse {
   return NextResponse.json({ error }, { status });
@@ -269,7 +270,20 @@ export function createErrorResponse(error: string, status: number): NextResponse
 
 /**
  * Helper to create success response
+ * @deprecated Use apiSuccess from '@/lib/api-response' for standardized responses
  */
 export function createSuccessResponse<T>(data: T, status: number = 200): NextResponse {
   return NextResponse.json({ success: true, data }, { status });
 }
+
+// Re-export standardized response utilities for convenience
+export {
+  apiSuccess,
+  apiError,
+  ApiErrors,
+  handleApiError,
+  handleZodError,
+  paginatedResponse,
+  ErrorCodes,
+} from '@/lib/api-response';
+export type { PaginationMeta, SuccessResponse, ErrorResponse, ErrorCode } from '@/lib/api-response';
