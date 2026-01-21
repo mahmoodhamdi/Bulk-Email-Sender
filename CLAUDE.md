@@ -64,7 +64,8 @@ Key enums: UserRole (USER/ADMIN/SUPER_ADMIN), CampaignStatus (DRAFT/SCHEDULED/SE
 
 ### Middleware (`src/middleware.ts`)
 
-- CSRF protection for API routes (validates `X-CSRF-Token` header)
+- CSRF protection for mutating API routes (validates `X-CSRF-Token` header)
+- GET requests are exempt from CSRF validation (read-only operations)
 - CSRF-exempt routes: `/api/health`, `/api/tracking/*`, `/api/auth`, `/api/webhooks/stripe|paymob|paytabs|paddle`
 - Security headers via `applySecurityHeaders()`
 - i18n routing via next-intl
@@ -80,13 +81,16 @@ import { auth, isAdmin, withAuth } from '@/lib/auth';
 const session = await auth();
 if (isAdmin(session)) { /* admin logic */ }
 
-// API route protection
-export const GET = withAuth(async (request, context) => {
-  // context.userId, context.userRole available
-}, { requiredPermission: 'campaigns:read' });
+// API route protection with withAuth HOC
+export const GET = withAuth(async (request, context, params) => {
+  // context: { type: 'session'|'api-key', userId, userRole, permissions? }
+  return NextResponse.json({ data });
+}, { requiredPermission: 'campaigns:read', requireAdmin: false });
 ```
 
 Role hierarchy: USER < ADMIN < SUPER_ADMIN
+
+API key permissions format: `resource:action` (e.g., `campaigns:read`, `campaigns:write`, `contacts:*`)
 
 ### Email System (`src/lib/email/`)
 
@@ -95,7 +99,12 @@ Role hierarchy: USER < ADMIN < SUPER_ADMIN
 
 ### Queue System (`src/lib/queue/`)
 
-BullMQ + Redis for email queue processing. Start worker: `npm run worker:dev`
+BullMQ + Redis for email queue processing. Worker runs via `tsx` (TypeScript executor).
+
+```bash
+npm run worker:dev   # Development with watch mode (tsx watch)
+npm run worker       # Production (tsx)
+```
 
 ### Webhook System (`src/lib/webhook/`)
 
@@ -111,12 +120,13 @@ fireEvent(WEBHOOK_EVENTS.EMAIL_SENT, { emailId, recipientEmail, campaignId }, { 
 Multi-gateway: Stripe (International), Paymob (Egypt), PayTabs (MENA), Paddle (Global MoR).
 
 ```typescript
-import { getPaymentGateway, SubscriptionTier } from '@/lib/payments';
-import { checkFeatureAccess, trackUsage } from '@/lib/subscription';
+import { getPaymentGateway, PaymentProvider } from '@/lib/payments';
+import { checkFeatureAccess, checkEmailLimit, incrementEmailCount } from '@/lib/subscription';
 
-const stripe = getPaymentGateway('stripe');
-const canUseABTesting = await checkFeatureAccess(userId, 'abTesting');
-await trackUsage(userId, 'emailsSent', 100);
+const stripe = await getPaymentGateway(PaymentProvider.STRIPE);
+const { allowed } = await checkFeatureAccess(userId, 'abTesting');
+const emailCheck = await checkEmailLimit(userId, 100);
+if (emailCheck.allowed) await incrementEmailCount(userId, 100);
 ```
 
 Subscription tiers: FREE ($0, 100 emails), STARTER ($4.99, 5K), PRO ($14.99, 50K), ENTERPRISE ($49.99, unlimited).
@@ -137,11 +147,17 @@ Zustand stores in `src/stores/`: campaign, analytics, billing, ab-test, automati
 
 ## Testing
 
-- Unit tests: `__tests__/unit/` - jsdom environment
-- Integration tests: `__tests__/integration/` - node environment, 30s timeout
+- Unit tests: `__tests__/unit/` - jsdom environment, uses `vitest.config.ts`
+- Integration tests: `__tests__/integration/` - node environment, 30s timeout, uses `vitest.integration.config.ts`
 - E2E tests: `__tests__/e2e/` - Playwright
 
 Test setup in `src/test/setup.ts` mocks `next/navigation`, `next-intl`, `ResizeObserver`, `window.matchMedia`.
+
+Run specific test patterns:
+```bash
+npx vitest run __tests__/unit/lib/   # Run all unit tests in lib/
+npx vitest run -t "email"            # Run tests matching "email"
+```
 
 ## Environment Variables
 
@@ -150,7 +166,8 @@ Test setup in `src/test/setup.ts` mocks `next/navigation`, `next-intl`, `ResizeO
 - `DATABASE_URL` - PostgreSQL connection string
 - `REDIS_URL` - Redis connection string
 - `NEXT_PUBLIC_APP_URL` - Application URL
-- `NEXTAUTH_SECRET` - NextAuth.js secret
+- `TRACKING_URL` - Base URL for email tracking pixels/links (defaults to `{APP_URL}/api/track`)
+- `NEXTAUTH_SECRET` - NextAuth.js secret (generate with `openssl rand -base64 32`)
 - `NEXTAUTH_URL` - NextAuth.js URL
 
 **Optional (OAuth):**
@@ -171,3 +188,21 @@ Test setup in `src/test/setup.ts` mocks `next/navigation`, `next-intl`, `ResizeO
 - Paddle: `PADDLE_API_KEY`, `PADDLE_WEBHOOK_SECRET`, product IDs
 
 See `.env.example` for complete list.
+
+## API Response Patterns
+
+Use the auth middleware helpers for consistent responses:
+
+```typescript
+import { createErrorResponse, createSuccessResponse } from '@/lib/auth';
+
+// Error: { error: string }
+return createErrorResponse('Not found', 404);
+
+// Success: { success: true, data: T }
+return createSuccessResponse({ campaigns: [] });
+```
+
+## Validation
+
+Use Zod schemas from `src/lib/validations/` for API input validation. Schemas follow the pattern `{resource}Schema` (e.g., `campaignSchema`, `contactSchema`).

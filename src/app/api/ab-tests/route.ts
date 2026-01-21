@@ -1,20 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { ZodError } from 'zod';
 import { apiRateLimiter } from '@/lib/rate-limit';
+import { prisma } from '@/lib/db/prisma';
 import {
   createABTest,
   listABTests,
   createABTestSchema,
 } from '@/lib/ab-test';
+import { withAuth, createErrorResponse, AuthContext } from '@/lib/auth';
 
 /**
  * GET /api/ab-tests
  * List A/B tests with pagination and filtering
+ * Requires authentication - users can only see their own A/B tests
  */
-export async function GET(request: NextRequest) {
+export const GET = withAuth(async (request: NextRequest, context: AuthContext) => {
   try {
     // Rate limiting
-    const rateLimitResult = apiRateLimiter.check('ab-tests-list');
+    const rateLimitResult = apiRateLimiter.check(`ab-tests-list-${context.userId}`);
     if (!rateLimitResult.success) {
       const retryAfter = Math.ceil((rateLimitResult.resetAt - Date.now()) / 1000);
       return NextResponse.json(
@@ -29,7 +32,9 @@ export async function GET(request: NextRequest) {
     const limit = Math.min(100, parseInt(searchParams.get('limit') || '20', 10));
     const status = searchParams.get('status') as 'DRAFT' | 'RUNNING' | 'COMPLETED' | 'CANCELLED' | null;
 
+    // Filter by userId for owner validation
     const { tests, total } = await listABTests({
+      userId: context.userId, // Owner filter - users can only see their own tests
       status: status || undefined,
       page,
       limit,
@@ -51,16 +56,17 @@ export async function GET(request: NextRequest) {
       { status: 500 }
     );
   }
-}
+}, { requiredPermission: 'ab-tests:read' });
 
 /**
  * POST /api/ab-tests
  * Create a new A/B test
+ * Requires authentication - test is associated with the authenticated user
  */
-export async function POST(request: NextRequest) {
+export const POST = withAuth(async (request: NextRequest, context: AuthContext) => {
   try {
     // Rate limiting
-    const rateLimitResult = apiRateLimiter.check('ab-tests-create');
+    const rateLimitResult = apiRateLimiter.check(`ab-tests-create-${context.userId}`);
     if (!rateLimitResult.success) {
       const retryAfter = Math.ceil((rateLimitResult.resetAt - Date.now()) / 1000);
       return NextResponse.json(
@@ -73,8 +79,21 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const validated = createABTestSchema.parse(body);
 
-    // Create A/B test
-    const abTest = await createABTest(validated);
+    // Verify the campaign belongs to the user before creating the test
+    const campaign = await prisma.campaign.findFirst({
+      where: {
+        id: validated.campaignId,
+        userId: context.userId, // Owner validation
+      },
+      select: { id: true },
+    });
+
+    if (!campaign) {
+      return createErrorResponse('Campaign not found', 404);
+    }
+
+    // Create A/B test - associate with authenticated user
+    const abTest = await createABTest(validated, context.userId);
 
     return NextResponse.json({ data: abTest }, { status: 201 });
   } catch (error: unknown) {
@@ -110,4 +129,4 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     );
   }
-}
+}, { requiredPermission: 'ab-tests:write' });

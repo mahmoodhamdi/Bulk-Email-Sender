@@ -6,15 +6,17 @@ import {
   listAutomations,
   createAutomationSchema,
 } from '@/lib/automation';
+import { withAuth, AuthContext } from '@/lib/auth';
 
 /**
  * GET /api/automations
  * List automations with pagination and filtering
+ * Requires authentication - users can only see their own automations
  */
-export async function GET(request: NextRequest) {
+export const GET = withAuth(async (request: NextRequest, context: AuthContext) => {
   try {
     // Rate limiting
-    const rateLimitResult = apiRateLimiter.check('automations-list');
+    const rateLimitResult = apiRateLimiter.check(`automations-list-${context.userId}`);
     if (!rateLimitResult.success) {
       const retryAfter = Math.ceil((rateLimitResult.resetAt - Date.now()) / 1000);
       return NextResponse.json(
@@ -29,7 +31,9 @@ export async function GET(request: NextRequest) {
     const limit = Math.min(100, parseInt(searchParams.get('limit') || '20', 10));
     const status = searchParams.get('status') as 'DRAFT' | 'ACTIVE' | 'PAUSED' | 'ARCHIVED' | null;
 
+    // Filter by userId for owner validation
     const { automations, total } = await listAutomations({
+      userId: context.userId, // Owner filter - users can only see their own automations
       status: status || undefined,
       page,
       limit,
@@ -51,16 +55,17 @@ export async function GET(request: NextRequest) {
       { status: 500 }
     );
   }
-}
+}, { requiredPermission: 'automations:read' });
 
 /**
  * POST /api/automations
  * Create a new automation
+ * Requires authentication - automation is associated with the authenticated user
  */
-export async function POST(request: NextRequest) {
+export const POST = withAuth(async (request: NextRequest, context: AuthContext) => {
   try {
     // Rate limiting
-    const rateLimitResult = apiRateLimiter.check('automations-create');
+    const rateLimitResult = apiRateLimiter.check(`automations-create-${context.userId}`);
     if (!rateLimitResult.success) {
       const retryAfter = Math.ceil((rateLimitResult.resetAt - Date.now()) / 1000);
       return NextResponse.json(
@@ -73,8 +78,8 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const validated = createAutomationSchema.parse(body);
 
-    // Create automation
-    const automation = await createAutomation(validated);
+    // Create automation - associate with authenticated user
+    const automation = await createAutomation(validated, context.userId);
 
     return NextResponse.json({ data: automation }, { status: 201 });
   } catch (error: unknown) {
@@ -96,4 +101,4 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     );
   }
-}
+}, { requiredPermission: 'automations:write' });

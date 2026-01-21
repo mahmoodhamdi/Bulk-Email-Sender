@@ -1,27 +1,47 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { ZodError } from 'zod';
 import { apiRateLimiter } from '@/lib/rate-limit';
+import { prisma } from '@/lib/db/prisma';
 import {
   getWebhook,
   listDeliveries,
   retryDelivery,
   listDeliveriesQuerySchema,
 } from '@/lib/webhook';
+import { withAuth, createErrorResponse, AuthContext } from '@/lib/auth';
 
 interface RouteParams {
-  params: Promise<{ id: string }>;
+  id: string;
+}
+
+/**
+ * Helper function to validate webhook ownership
+ */
+async function validateWebhookOwnership(webhookId: string, userId: string): Promise<boolean> {
+  const webhook = await prisma.webhook.findFirst({
+    where: {
+      id: webhookId,
+      userId: userId,
+    },
+    select: { id: true },
+  });
+  return webhook !== null;
 }
 
 /**
  * GET /api/webhooks/[id]/deliveries
  * List delivery history for a webhook
+ * Requires authentication - users can only view deliveries for their own webhooks
  */
-export async function GET(request: NextRequest, { params }: RouteParams) {
+export const GET = withAuth(async (request: NextRequest, context: AuthContext, params?: RouteParams) => {
   try {
-    const { id } = await params;
+    if (!params?.id) {
+      return createErrorResponse('ID is required', 400);
+    }
+    const { id } = params;
 
     // Rate limiting
-    const rateLimitResult = apiRateLimiter.check(`webhooks-deliveries-${id}`);
+    const rateLimitResult = apiRateLimiter.check(`webhooks-deliveries-${context.userId}-${id}`);
     if (!rateLimitResult.success) {
       const retryAfter = Math.ceil((rateLimitResult.resetAt - Date.now()) / 1000);
       return NextResponse.json(
@@ -30,13 +50,16 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       );
     }
 
+    // Owner validation - check if webhook belongs to the user
+    const isOwner = await validateWebhookOwnership(id, context.userId);
+    if (!isOwner) {
+      return createErrorResponse('Webhook not found', 404);
+    }
+
     // Check if webhook exists
     const webhook = await getWebhook(id);
     if (!webhook) {
-      return NextResponse.json(
-        { error: 'Webhook not found' },
-        { status: 404 }
-      );
+      return createErrorResponse('Webhook not found', 404);
     }
 
     // Parse query parameters
@@ -86,18 +109,22 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       { status: 500 }
     );
   }
-}
+}, { requiredPermission: 'webhooks:read' });
 
 /**
  * POST /api/webhooks/[id]/deliveries
  * Retry a failed delivery (requires deliveryId in body)
+ * Requires authentication - users can only retry deliveries for their own webhooks
  */
-export async function POST(request: NextRequest, { params }: RouteParams) {
+export const POST = withAuth(async (request: NextRequest, context: AuthContext, params?: RouteParams) => {
   try {
-    const { id } = await params;
+    if (!params?.id) {
+      return createErrorResponse('ID is required', 400);
+    }
+    const { id } = params;
 
     // Rate limiting
-    const rateLimitResult = apiRateLimiter.check(`webhooks-retry-${id}`);
+    const rateLimitResult = apiRateLimiter.check(`webhooks-retry-${context.userId}-${id}`);
     if (!rateLimitResult.success) {
       const retryAfter = Math.ceil((rateLimitResult.resetAt - Date.now()) / 1000);
       return NextResponse.json(
@@ -106,13 +133,16 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       );
     }
 
+    // Owner validation - check if webhook belongs to the user
+    const isOwner = await validateWebhookOwnership(id, context.userId);
+    if (!isOwner) {
+      return createErrorResponse('Webhook not found', 404);
+    }
+
     // Check if webhook exists
     const webhook = await getWebhook(id);
     if (!webhook) {
-      return NextResponse.json(
-        { error: 'Webhook not found' },
-        { status: 404 }
-      );
+      return createErrorResponse('Webhook not found', 404);
     }
 
     // Parse body
@@ -126,18 +156,27 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       );
     }
 
-    // Retry delivery
-    const delivery = await retryDelivery(deliveryId);
+    // Verify the delivery belongs to this webhook
+    const delivery = await prisma.webhookDelivery.findFirst({
+      where: {
+        id: deliveryId,
+        webhookId: id,
+      },
+    });
 
     if (!delivery) {
-      return NextResponse.json(
-        { error: 'Delivery not found' },
-        { status: 404 }
-      );
+      return createErrorResponse('Delivery not found', 404);
+    }
+
+    // Retry delivery
+    const retriedDelivery = await retryDelivery(deliveryId);
+
+    if (!retriedDelivery) {
+      return createErrorResponse('Delivery not found', 404);
     }
 
     return NextResponse.json({
-      data: delivery,
+      data: retriedDelivery,
       message: 'Delivery retry queued successfully',
     });
   } catch (error: unknown) {
@@ -159,4 +198,4 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       { status: 500 }
     );
   }
-}
+}, { requiredPermission: 'webhooks:write' });

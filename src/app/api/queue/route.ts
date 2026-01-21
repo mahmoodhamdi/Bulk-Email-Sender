@@ -9,16 +9,16 @@ import {
   checkRedisHealth,
   getWorkerStatus,
 } from '@/lib/queue';
-import { workerControlSchema, cleanQueueSchema } from '@/lib/validations/queue';
+import { cleanQueueSchema } from '@/lib/validations/queue';
+import { withAuth, AuthContext } from '@/lib/auth';
 
 /**
  * GET /api/queue - Get queue health and statistics
+ * Requires admin role - queue operations are sensitive
  */
-export async function GET(request: NextRequest) {
+export const GET = withAuth(async (request: NextRequest, context: AuthContext) => {
   // Rate limiting
-  const rateLimitResult = await apiRateLimiter.check(
-    request.headers.get('x-forwarded-for') || 'anonymous'
-  );
+  const rateLimitResult = apiRateLimiter.check(`queue-health-${context.userId}`);
   if (!rateLimitResult.success) {
     return NextResponse.json(
       { error: 'Too many requests', resetAt: rateLimitResult.resetAt },
@@ -60,16 +60,15 @@ export async function GET(request: NextRequest) {
       { status: 500 }
     );
   }
-}
+}, { requireAdmin: true });
 
 /**
  * POST /api/queue - Control queue operations (pause, resume, clean)
+ * Requires admin role - queue operations are destructive
  */
-export async function POST(request: NextRequest) {
+export const POST = withAuth(async (request: NextRequest, context: AuthContext) => {
   // Rate limiting
-  const rateLimitResult = await apiRateLimiter.check(
-    request.headers.get('x-forwarded-for') || 'anonymous'
-  );
+  const rateLimitResult = apiRateLimiter.check(`queue-control-${context.userId}`);
   if (!rateLimitResult.success) {
     return NextResponse.json(
       { error: 'Too many requests', resetAt: rateLimitResult.resetAt },
@@ -141,4 +140,4 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     );
   }
-}
+}, { requireAdmin: true });

@@ -1,12 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createEmailSender } from '@/lib/email/sender';
-import { smtpTestRateLimiter } from '@/lib/rate-limit';
+import { apiRateLimiter } from '@/lib/rate-limit';
+import { withAuth, AuthContext } from '@/lib/auth';
 
-export async function POST(request: NextRequest) {
-  // Apply rate limiting (5 requests per 5 minutes)
-  const rateLimitResponse = await smtpTestRateLimiter.middleware(request);
-  if (rateLimitResponse) {
-    return rateLimitResponse;
+/**
+ * POST /api/smtp/test
+ * Test SMTP connection
+ * Requires authentication - prevents unauthorized SMTP probing
+ */
+export const POST = withAuth(async (request: NextRequest, context: AuthContext) => {
+  // Apply rate limiting (5 requests per 5 minutes per user)
+  const rateLimitResult = apiRateLimiter.check(`smtp-test-${context.userId}`);
+  if (!rateLimitResult.success) {
+    const retryAfter = Math.ceil((rateLimitResult.resetAt - Date.now()) / 1000);
+    return NextResponse.json(
+      { error: 'Too many requests', retryAfter },
+      { status: 429 }
+    );
   }
 
   try {
@@ -49,4 +59,4 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     );
   }
-}
+}, { requiredPermission: 'campaigns:write' });
