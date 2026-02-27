@@ -71,6 +71,8 @@ describe('Template Versions API Routes', () => {
         },
       ];
 
+      // Routes use findFirst for owner validation, then findUnique to get currentVersion
+      vi.mocked(prisma.template.findFirst).mockResolvedValue({ id: 'template-1' } as never);
       vi.mocked(prisma.template.findUnique).mockResolvedValue(mockTemplate as never);
       vi.mocked(prisma.templateVersion.findMany).mockResolvedValue(mockVersions as never);
       vi.mocked(prisma.templateVersion.count).mockResolvedValue(3);
@@ -86,7 +88,7 @@ describe('Template Versions API Routes', () => {
     });
 
     it('should return 404 if template not found', async () => {
-      vi.mocked(prisma.template.findUnique).mockResolvedValue(null);
+      vi.mocked(prisma.template.findFirst).mockResolvedValue(null);
 
       const request = new NextRequest('http://localhost:3000/api/templates/nonexistent/versions');
       const response = await ListVersions(request, { params: Promise.resolve({ id: 'nonexistent' }) });
@@ -95,6 +97,7 @@ describe('Template Versions API Routes', () => {
     });
 
     it('should support pagination parameters', async () => {
+      vi.mocked(prisma.template.findFirst).mockResolvedValue({ id: 'template-1' } as never);
       vi.mocked(prisma.template.findUnique).mockResolvedValue({ id: 'template-1', currentVersion: 10 } as never);
       vi.mocked(prisma.templateVersion.findMany).mockResolvedValue([]);
       vi.mocked(prisma.templateVersion.count).mockResolvedValue(50);
@@ -127,7 +130,8 @@ describe('Template Versions API Routes', () => {
         createdAt: new Date(),
       };
 
-      vi.mocked(prisma.template.findUnique).mockResolvedValue(mockTemplate as never);
+      // Routes use findFirst for owner validation
+      vi.mocked(prisma.template.findFirst).mockResolvedValue(mockTemplate as never);
       vi.mocked(prisma.templateVersion.findUnique).mockResolvedValue(mockVersion as never);
 
       const request = new NextRequest('http://localhost:3000/api/templates/template-1/versions/2');
@@ -141,7 +145,7 @@ describe('Template Versions API Routes', () => {
     });
 
     it('should return 404 if template not found', async () => {
-      vi.mocked(prisma.template.findUnique).mockResolvedValue(null);
+      vi.mocked(prisma.template.findFirst).mockResolvedValue(null);
 
       const request = new NextRequest('http://localhost:3000/api/templates/nonexistent/versions/1');
       const response = await GetVersion(request, { params: Promise.resolve({ id: 'nonexistent', version: '1' }) });
@@ -150,7 +154,7 @@ describe('Template Versions API Routes', () => {
     });
 
     it('should return 404 if version not found', async () => {
-      vi.mocked(prisma.template.findUnique).mockResolvedValue({ id: 'template-1' } as never);
+      vi.mocked(prisma.template.findFirst).mockResolvedValue({ id: 'template-1' } as never);
       vi.mocked(prisma.templateVersion.findUnique).mockResolvedValue(null);
 
       const request = new NextRequest('http://localhost:3000/api/templates/template-1/versions/99');
@@ -193,7 +197,8 @@ describe('Template Versions API Routes', () => {
         currentVersion: 4,
       };
 
-      vi.mocked(prisma.template.findUnique).mockResolvedValue(mockTemplate as never);
+      // Routes use findFirst for owner validation
+      vi.mocked(prisma.template.findFirst).mockResolvedValue(mockTemplate as never);
       vi.mocked(prisma.templateVersion.findUnique).mockResolvedValue(mockTargetVersion as never);
       vi.mocked(prisma.$transaction).mockResolvedValue([mockNewVersion, mockUpdatedTemplate] as never);
 
@@ -211,7 +216,7 @@ describe('Template Versions API Routes', () => {
     });
 
     it('should return 404 if template not found', async () => {
-      vi.mocked(prisma.template.findUnique).mockResolvedValue(null);
+      vi.mocked(prisma.template.findFirst).mockResolvedValue(null);
 
       const request = new NextRequest('http://localhost:3000/api/templates/nonexistent/versions/1/revert', {
         method: 'POST',
@@ -222,7 +227,7 @@ describe('Template Versions API Routes', () => {
     });
 
     it('should return 404 if target version not found', async () => {
-      vi.mocked(prisma.template.findUnique).mockResolvedValue({ id: 'template-1', currentVersion: 3, userId: null } as never);
+      vi.mocked(prisma.template.findFirst).mockResolvedValue({ id: 'template-1', currentVersion: 3, userId: null } as never);
       vi.mocked(prisma.templateVersion.findUnique).mockResolvedValue(null);
 
       const request = new NextRequest('http://localhost:3000/api/templates/template-1/versions/99/revert', {
@@ -234,7 +239,7 @@ describe('Template Versions API Routes', () => {
     });
 
     it('should return 400 if trying to revert to current version', async () => {
-      vi.mocked(prisma.template.findUnique).mockResolvedValue({ id: 'template-1', currentVersion: 3, userId: null } as never);
+      vi.mocked(prisma.template.findFirst).mockResolvedValue({ id: 'template-1', currentVersion: 3, userId: null } as never);
       vi.mocked(prisma.templateVersion.findUnique).mockResolvedValue({ version: 3 } as never);
 
       const request = new NextRequest('http://localhost:3000/api/templates/template-1/versions/3/revert', {
@@ -270,7 +275,7 @@ describe('Template Versions API Routes', () => {
         currentVersion: 4,
       };
 
-      vi.mocked(prisma.template.findUnique).mockResolvedValue(mockTemplate as never);
+      vi.mocked(prisma.template.findFirst).mockResolvedValue(mockTemplate as never);
       vi.mocked(prisma.templateVersion.findUnique).mockResolvedValue(mockTargetVersion as never);
       vi.mocked(prisma.$transaction).mockResolvedValue([mockNewVersion, mockUpdatedTemplate] as never);
 
@@ -306,7 +311,8 @@ describe('Template Versions API Routes', () => {
         createdAt: new Date('2024-01-15'),
       };
 
-      vi.mocked(prisma.template.findUnique).mockResolvedValue(mockTemplate as never);
+      // Routes use findFirst for owner validation
+      vi.mocked(prisma.template.findFirst).mockResolvedValue(mockTemplate as never);
       vi.mocked(prisma.templateVersion.findUnique)
         .mockResolvedValueOnce(mockVersion1 as never)
         .mockResolvedValueOnce(mockVersion2 as never);
@@ -325,7 +331,7 @@ describe('Template Versions API Routes', () => {
     });
 
     it('should return 404 if template not found', async () => {
-      vi.mocked(prisma.template.findUnique).mockResolvedValue(null);
+      vi.mocked(prisma.template.findFirst).mockResolvedValue(null);
 
       const request = new NextRequest('http://localhost:3000/api/templates/nonexistent/versions/compare?v1=1&v2=2');
       const response = await CompareVersions(request, { params: Promise.resolve({ id: 'nonexistent' }) });
@@ -334,7 +340,7 @@ describe('Template Versions API Routes', () => {
     });
 
     it('should return 400 if v1 is missing', async () => {
-      vi.mocked(prisma.template.findUnique).mockResolvedValue({ id: 'template-1' } as never);
+      vi.mocked(prisma.template.findFirst).mockResolvedValue({ id: 'template-1' } as never);
 
       const request = new NextRequest('http://localhost:3000/api/templates/template-1/versions/compare?v2=2');
       const response = await CompareVersions(request, { params: Promise.resolve({ id: 'template-1' }) });
@@ -343,7 +349,7 @@ describe('Template Versions API Routes', () => {
     });
 
     it('should return 400 if v2 is missing', async () => {
-      vi.mocked(prisma.template.findUnique).mockResolvedValue({ id: 'template-1' } as never);
+      vi.mocked(prisma.template.findFirst).mockResolvedValue({ id: 'template-1' } as never);
 
       const request = new NextRequest('http://localhost:3000/api/templates/template-1/versions/compare?v1=1');
       const response = await CompareVersions(request, { params: Promise.resolve({ id: 'template-1' }) });
@@ -352,7 +358,7 @@ describe('Template Versions API Routes', () => {
     });
 
     it('should return 404 if one version not found', async () => {
-      vi.mocked(prisma.template.findUnique).mockResolvedValue({ id: 'template-1' } as never);
+      vi.mocked(prisma.template.findFirst).mockResolvedValue({ id: 'template-1' } as never);
       vi.mocked(prisma.templateVersion.findUnique)
         .mockResolvedValueOnce({ version: 1 } as never)
         .mockResolvedValueOnce(null);

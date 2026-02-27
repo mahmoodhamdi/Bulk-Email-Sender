@@ -9,6 +9,7 @@ vi.mock('@/lib/db/prisma', () => ({
     campaign: {
       findMany: vi.fn(),
       findUnique: vi.fn(),
+      findFirst: vi.fn(),
       create: vi.fn(),
       update: vi.fn(),
       delete: vi.fn(),
@@ -159,7 +160,8 @@ describe('Campaigns API Routes', () => {
         _count: { recipients: 10, events: 5 },
       };
 
-      vi.mocked(prisma.campaign.findUnique).mockResolvedValue(mockCampaign as never);
+      // Routes use findFirst with userId filter for owner validation
+      vi.mocked(prisma.campaign.findFirst).mockResolvedValue(mockCampaign as never);
 
       const request = new NextRequest('http://localhost:3000/api/campaigns/clxxxxxxxxxxxxxxxxxx');
       const response = await GETById(request, { params: Promise.resolve({ id: 'clxxxxxxxxxxxxxxxxxx' }) });
@@ -170,7 +172,7 @@ describe('Campaigns API Routes', () => {
     });
 
     it('should return 404 for non-existent campaign', async () => {
-      vi.mocked(prisma.campaign.findUnique).mockResolvedValue(null);
+      vi.mocked(prisma.campaign.findFirst).mockResolvedValue(null);
 
       const request = new NextRequest('http://localhost:3000/api/campaigns/clyyyyyyyyyyyyyyyy');
       const response = await GETById(request, { params: Promise.resolve({ id: 'clyyyyyyyyyyyyyyyy' }) });
@@ -194,7 +196,8 @@ describe('Campaigns API Routes', () => {
         status: 'DRAFT',
       };
 
-      vi.mocked(prisma.campaign.findUnique).mockResolvedValue(existingCampaign as never);
+      // Routes use findFirst with userId filter for owner validation
+      vi.mocked(prisma.campaign.findFirst).mockResolvedValue(existingCampaign as never);
       vi.mocked(prisma.campaign.update).mockResolvedValue(updatedCampaign as never);
 
       const request = new NextRequest('http://localhost:3000/api/campaigns/clxxxxxxxxxxxxxxxxxx', {
@@ -210,7 +213,7 @@ describe('Campaigns API Routes', () => {
     });
 
     it('should return 404 for non-existent campaign on update', async () => {
-      vi.mocked(prisma.campaign.findUnique).mockResolvedValue(null);
+      vi.mocked(prisma.campaign.findFirst).mockResolvedValue(null);
 
       const request = new NextRequest('http://localhost:3000/api/campaigns/clxxxxxxxxxxxxxxxxxx', {
         method: 'PUT',
@@ -227,7 +230,7 @@ describe('Campaigns API Routes', () => {
 
   describe('DELETE /api/campaigns/[id]', () => {
     it('should delete a campaign', async () => {
-      vi.mocked(prisma.campaign.findUnique).mockResolvedValue({
+      vi.mocked(prisma.campaign.findFirst).mockResolvedValue({
         id: 'clxxxxxxxxxxxxxxxxxx',
         status: 'DRAFT',
       } as never);
@@ -245,7 +248,7 @@ describe('Campaigns API Routes', () => {
     });
 
     it('should return 404 for non-existent campaign on delete', async () => {
-      vi.mocked(prisma.campaign.findUnique).mockResolvedValue(null);
+      vi.mocked(prisma.campaign.findFirst).mockResolvedValue(null);
 
       const request = new NextRequest('http://localhost:3000/api/campaigns/clxxxxxxxxxxxxxxxxxx', {
         method: 'DELETE',

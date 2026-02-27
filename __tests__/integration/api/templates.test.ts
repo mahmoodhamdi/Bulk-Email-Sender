@@ -186,7 +186,7 @@ describe('Templates API Routes', () => {
       await POST(request);
 
       expect(prisma.template.updateMany).toHaveBeenCalledWith({
-        where: { isDefault: true },
+        where: { isDefault: true, userId: 'test-user-id' },
         data: { isDefault: false },
       });
     });
@@ -202,7 +202,8 @@ describe('Templates API Routes', () => {
         _count: { campaigns: 3 },
       };
 
-      vi.mocked(prisma.template.findUnique).mockResolvedValue(mockTemplate as never);
+      // Routes use findFirst with userId filter for owner validation
+      vi.mocked(prisma.template.findFirst).mockResolvedValue(mockTemplate as never);
 
       const request = new NextRequest('http://localhost:3000/api/templates/tpl-1');
       const response = await GETById(request, { params: Promise.resolve({ id: 'tpl-1' }) });
@@ -213,7 +214,7 @@ describe('Templates API Routes', () => {
     });
 
     it('should return 404 for non-existent template', async () => {
-      vi.mocked(prisma.template.findUnique).mockResolvedValue(null);
+      vi.mocked(prisma.template.findFirst).mockResolvedValue(null);
 
       const request = new NextRequest('http://localhost:3000/api/templates/non-existent');
       const response = await GETById(request, { params: Promise.resolve({ id: 'non-existent' }) });
@@ -228,7 +229,7 @@ describe('Templates API Routes', () => {
     it('should update a template', async () => {
       // First call: check if template exists and get versioned fields
       // Second call: version service gets currentVersion
-      vi.mocked(prisma.template.findUnique)
+      vi.mocked(prisma.template.findFirst)
         .mockResolvedValueOnce({
           id: 'tpl-1',
           name: 'Old Name',
@@ -238,11 +239,11 @@ describe('Templates API Routes', () => {
           category: null,
           userId: null,
         } as never)
-        .mockResolvedValueOnce({
-          id: 'tpl-1',
-          currentVersion: 1,
-        } as never);
-      vi.mocked(prisma.template.findFirst).mockResolvedValue(null);
+        .mockResolvedValueOnce(null); // No duplicate name check
+      vi.mocked(prisma.template.findUnique).mockResolvedValue({
+        id: 'tpl-1',
+        currentVersion: 1,
+      } as never);
       vi.mocked(prisma.template.update).mockResolvedValue({
         id: 'tpl-1',
         name: 'Updated Name',
@@ -274,14 +275,15 @@ describe('Templates API Routes', () => {
     });
 
     it('should return 409 for duplicate name on update', async () => {
-      vi.mocked(prisma.template.findUnique).mockResolvedValue({
-        id: 'tpl-1',
-        name: 'Original',
-      } as never);
-      vi.mocked(prisma.template.findFirst).mockResolvedValue({
-        id: 'tpl-other',
-        name: 'Existing Name',
-      } as never);
+      vi.mocked(prisma.template.findFirst)
+        .mockResolvedValueOnce({
+          id: 'tpl-1',
+          name: 'Original',
+        } as never)
+        .mockResolvedValueOnce({
+          id: 'tpl-other',
+          name: 'Existing Name',
+        } as never);
 
       const request = new NextRequest('http://localhost:3000/api/templates/tpl-1', {
         method: 'PUT',
@@ -298,7 +300,7 @@ describe('Templates API Routes', () => {
 
   describe('DELETE /api/templates/[id]', () => {
     it('should delete a template', async () => {
-      vi.mocked(prisma.template.findUnique).mockResolvedValue({
+      vi.mocked(prisma.template.findFirst).mockResolvedValue({
         id: 'tpl-1',
         _count: { campaigns: 0 },
       } as never);
@@ -316,7 +318,7 @@ describe('Templates API Routes', () => {
     });
 
     it('should not delete template used by campaigns', async () => {
-      vi.mocked(prisma.template.findUnique).mockResolvedValue({
+      vi.mocked(prisma.template.findFirst).mockResolvedValue({
         id: 'tpl-1',
         _count: { campaigns: 5 },
       } as never);
@@ -335,14 +337,15 @@ describe('Templates API Routes', () => {
 
   describe('POST /api/templates/[id] (Duplicate)', () => {
     it('should duplicate a template', async () => {
-      vi.mocked(prisma.template.findUnique).mockResolvedValue({
-        id: 'tpl-1',
-        name: 'Original Template',
-        subject: 'Subject',
-        content: '<p>Content</p>',
-        category: 'marketing',
-      } as never);
-      vi.mocked(prisma.template.findFirst).mockResolvedValue(null);
+      vi.mocked(prisma.template.findFirst)
+        .mockResolvedValueOnce({
+          id: 'tpl-1',
+          name: 'Original Template',
+          subject: 'Subject',
+          content: '<p>Content</p>',
+          category: 'marketing',
+        } as never)
+        .mockResolvedValueOnce(null); // No duplicate name check
       vi.mocked(prisma.template.create).mockResolvedValue({
         id: 'tpl-copy',
         name: 'Copy of Template',
@@ -374,7 +377,7 @@ describe('Templates API Routes', () => {
     });
 
     it('should return 404 when duplicating non-existent template', async () => {
-      vi.mocked(prisma.template.findUnique).mockResolvedValue(null);
+      vi.mocked(prisma.template.findFirst).mockResolvedValue(null);
 
       const request = new NextRequest('http://localhost:3000/api/templates/non-existent', {
         method: 'POST',

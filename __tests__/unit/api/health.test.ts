@@ -1,4 +1,17 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+
+// Mock Prisma
+vi.mock('@/lib/db/prisma', () => ({
+  prisma: {
+    $queryRaw: vi.fn().mockResolvedValue([{ '?column?': 1 }]),
+  },
+}));
+
+// Mock queue redis health check
+vi.mock('@/lib/queue', () => ({
+  checkRedisHealth: vi.fn().mockResolvedValue({ connected: true, latency: 1 }),
+}));
+
 import { GET } from '@/app/api/health/route';
 
 describe('Health API Route', () => {
