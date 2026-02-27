@@ -152,7 +152,8 @@ describe('Contacts API Routes', () => {
         _count: { recipients: 5, listMembers: 2 },
       };
 
-      vi.mocked(prisma.contact.findUnique).mockResolvedValue(mockContact as never);
+      // Routes use findFirst with userId filter for owner validation
+      vi.mocked(prisma.contact.findFirst).mockResolvedValue(mockContact as never);
 
       const request = new NextRequest('http://localhost:3000/api/contacts/cont-1');
       const response = await GETById(request, { params: Promise.resolve({ id: 'cont-1' }) });
@@ -163,7 +164,7 @@ describe('Contacts API Routes', () => {
     });
 
     it('should return 404 for non-existent contact', async () => {
-      vi.mocked(prisma.contact.findUnique).mockResolvedValue(null);
+      vi.mocked(prisma.contact.findFirst).mockResolvedValue(null);
 
       const request = new NextRequest('http://localhost:3000/api/contacts/non-existent');
       const response = await GETById(request, { params: Promise.resolve({ id: 'non-existent' }) });
@@ -176,7 +177,7 @@ describe('Contacts API Routes', () => {
 
   describe('DELETE /api/contacts/[id]', () => {
     it('should delete a contact', async () => {
-      vi.mocked(prisma.contact.findUnique).mockResolvedValue({ id: 'cont-1' } as never);
+      vi.mocked(prisma.contact.findFirst).mockResolvedValue({ id: 'cont-1' } as never);
       vi.mocked(prisma.contact.delete).mockResolvedValue({} as never);
 
       const request = new NextRequest('http://localhost:3000/api/contacts/cont-1', {
@@ -191,7 +192,7 @@ describe('Contacts API Routes', () => {
     });
 
     it('should return 404 for non-existent contact', async () => {
-      vi.mocked(prisma.contact.findUnique).mockResolvedValue(null);
+      vi.mocked(prisma.contact.findFirst).mockResolvedValue(null);
 
       const request = new NextRequest('http://localhost:3000/api/contacts/non-existent', {
         method: 'DELETE',
