@@ -5,6 +5,19 @@ import { ZodError } from 'zod';
 import { fireEvent, WEBHOOK_EVENTS } from '@/lib/webhook';
 
 /**
+ * Validate redirect URL to prevent open redirect attacks.
+ * Only allows http/https protocols and blocks javascript: / data: URIs.
+ */
+function isSafeRedirectUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    return ['http:', 'https:'].includes(parsed.protocol);
+  } catch {
+    return false;
+  }
+}
+
+/**
  * GET /api/tracking/click
  * Track link clicks and redirect to destination URL
  */
@@ -96,7 +109,13 @@ export async function GET(request: NextRequest) {
       }).catch((err) => console.error('Failed to fire webhook:', err));
     }
 
-    // Redirect to destination URL
+    // Redirect to destination URL (with protocol validation)
+    if (!isSafeRedirectUrl(validated.url)) {
+      return NextResponse.json(
+        { error: 'Invalid redirect URL' },
+        { status: 400 }
+      );
+    }
     return NextResponse.redirect(validated.url, { status: 302 });
   } catch (error: unknown) {
     if (error instanceof ZodError) {
@@ -108,15 +127,10 @@ export async function GET(request: NextRequest) {
     }
     console.error('Error tracking click:', error);
 
-    // Try to redirect to the URL even on error
+    // Try to redirect to the URL even on error (with safety check)
     const url = request.nextUrl.searchParams.get('url');
-    if (url) {
-      try {
-        new URL(url); // Validate URL
-        return NextResponse.redirect(url, { status: 302 });
-      } catch {
-        // Invalid URL
-      }
+    if (url && isSafeRedirectUrl(url)) {
+      return NextResponse.redirect(url, { status: 302 });
     }
 
     return NextResponse.json(

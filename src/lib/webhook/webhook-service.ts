@@ -1,5 +1,5 @@
 import { prisma } from '../db/prisma';
-import { encryptString, decryptString } from '../crypto';
+import { encryptServerSide, decryptServerSide } from '../crypto/server-encryption';
 import { addWebhookJob } from './webhook-queue';
 import { validateWebhookUrl } from '../ssrf-protection';
 import {
@@ -112,7 +112,7 @@ export async function queueDelivery(
   let authValue = webhook.authValue;
   if (authValue && ['BASIC', 'BEARER', 'API_KEY'].includes(webhook.authType)) {
     try {
-      authValue = await decryptString(authValue);
+      authValue = decryptServerSide(authValue);
     } catch {
       // If decryption fails, use as-is (might not be encrypted)
     }
@@ -156,6 +156,13 @@ export async function retryDelivery(deliveryId: string): Promise<WebhookDelivery
     throw new Error('Can only retry failed deliveries');
   }
 
+  // Re-validate URL before scheduling retry (URL or DNS may have changed)
+  const { validateWebhookUrl } = await import('../ssrf-protection');
+  const ssrfCheck = await validateWebhookUrl(delivery.webhook.url);
+  if (!ssrfCheck.safe) {
+    throw new Error(`Cannot retry: webhook URL blocked by SSRF protection`);
+  }
+
   // Reset delivery status
   const updatedDelivery = await prisma.webhookDelivery.update({
     where: { id: deliveryId },
@@ -173,7 +180,7 @@ export async function retryDelivery(deliveryId: string): Promise<WebhookDelivery
   let authValue = delivery.webhook.authValue;
   if (authValue && ['BASIC', 'BEARER', 'API_KEY'].includes(delivery.webhook.authType)) {
     try {
-      authValue = await decryptString(authValue);
+      authValue = decryptServerSide(authValue);
     } catch {
       // Use as-is
     }
@@ -257,7 +264,7 @@ export async function testWebhook(
   let authValue = webhook.authValue;
   if (authValue && ['BASIC', 'BEARER', 'API_KEY'].includes(webhook.authType)) {
     try {
-      authValue = await decryptString(authValue);
+      authValue = decryptServerSide(authValue);
     } catch {
       // Use as-is
     }
@@ -428,7 +435,7 @@ export async function createWebhook(data: {
   // Encrypt auth value if provided
   let encryptedAuthValue = data.authValue;
   if (encryptedAuthValue && ['BASIC', 'BEARER', 'API_KEY'].includes(data.authType || 'NONE')) {
-    encryptedAuthValue = await encryptString(encryptedAuthValue);
+    encryptedAuthValue = encryptServerSide(encryptedAuthValue);
   }
 
   return prisma.webhook.create({
@@ -476,7 +483,7 @@ export async function updateWebhook(
     const webhook = await prisma.webhook.findUnique({ where: { id } });
     const authType = data.authType || webhook?.authType || 'NONE';
     if (['BASIC', 'BEARER', 'API_KEY'].includes(authType)) {
-      encryptedAuthValue = await encryptString(encryptedAuthValue);
+      encryptedAuthValue = encryptServerSide(encryptedAuthValue);
     }
   }
 

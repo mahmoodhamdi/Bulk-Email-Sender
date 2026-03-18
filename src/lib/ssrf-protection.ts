@@ -177,12 +177,11 @@ export async function validateUrlForSsrf(
           safe: true,
           resolvedIp: primaryIp,
         };
-      } catch (dnsError) {
-        // DNS resolution failed - could be a non-existent domain
-        // We allow it through since it will fail at the actual request
+      } catch {
+        // DNS resolution failed - block by default (fail-closed)
         return {
-          safe: true,
-          reason: `DNS resolution failed for '${hostname}', proceeding anyway.`,
+          safe: false,
+          reason: `DNS resolution failed for '${hostname}'. Cannot verify the target is safe.`,
         };
       }
     }

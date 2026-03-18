@@ -4,28 +4,12 @@
 
 import DOMPurify from 'dompurify';
 
-// Check if we're in a browser or Node environment
-const isBrowser = typeof window !== 'undefined' && window.crypto;
-
 /**
  * Generate a cryptographically secure random ID
- * Uses Web Crypto API for security
+ * Uses Web Crypto API (available in both browser and Node.js 20+)
  */
 export function generateSecureId(prefix = ''): string {
-  if (isBrowser) {
-    return `${prefix}${crypto.randomUUID()}`;
-  }
-  // Fallback for SSR - still cryptographically secure
-  const array = new Uint8Array(16);
-  if (typeof globalThis.crypto !== 'undefined') {
-    globalThis.crypto.getRandomValues(array);
-  } else {
-    // Node.js fallback
-    for (let i = 0; i < 16; i++) {
-      array[i] = Math.floor(Math.random() * 256);
-    }
-  }
-  return `${prefix}${Array.from(array, (byte) => byte.toString(16).padStart(2, '0')).join('')}`;
+  return `${prefix}${crypto.randomUUID()}`;
 }
 
 /**
@@ -33,15 +17,7 @@ export function generateSecureId(prefix = ''): string {
  */
 export function generateShortId(length = 12): string {
   const array = new Uint8Array(Math.ceil(length / 2));
-  if (isBrowser) {
-    crypto.getRandomValues(array);
-  } else if (typeof globalThis.crypto !== 'undefined') {
-    globalThis.crypto.getRandomValues(array);
-  } else {
-    for (let i = 0; i < array.length; i++) {
-      array[i] = Math.floor(Math.random() * 256);
-    }
-  }
+  crypto.getRandomValues(array);
   return Array.from(array, (byte) => byte.toString(16).padStart(2, '0'))
     .join('')
     .slice(0, length);
@@ -206,21 +182,11 @@ function deobfuscateFallback(obfuscated: string): string {
  * Hash a string using SHA-256 (async, for browser)
  */
 export async function hashString(str: string): Promise<string> {
-  if (isBrowser) {
-    const encoder = new TextEncoder();
-    const data = encoder.encode(str);
-    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-    const hashArray = Array.from(new Uint8Array(hashBuffer));
-    return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
-  }
-  // Fallback - just return a basic hash
-  let hash = 0;
-  for (let i = 0; i < str.length; i++) {
-    const char = str.charCodeAt(i);
-    hash = (hash << 5) - hash + char;
-    hash = hash & hash;
-  }
-  return Math.abs(hash).toString(16);
+  const encoder = new TextEncoder();
+  const data = encoder.encode(str);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
 /**

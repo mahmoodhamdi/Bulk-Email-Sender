@@ -21,10 +21,24 @@ export const billingIntervalSchema = z.enum(['monthly', 'yearly']);
 // CHECKOUT SCHEMAS
 // ===========================================
 
+/** Validate that a redirect URL belongs to the application domain */
+function isAppDomainUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL;
+    if (!appUrl) return true; // allow in development without APP_URL
+    const allowed = new URL(appUrl);
+    return parsed.hostname === allowed.hostname ||
+           parsed.hostname.endsWith(`.${allowed.hostname}`);
+  } catch {
+    return false;
+  }
+}
+
 export const createCheckoutSessionSchema = z.object({
   tier: subscriptionTierSchema,
-  successUrl: z.string().url('Invalid success URL'),
-  cancelUrl: z.string().url('Invalid cancel URL'),
+  successUrl: z.string().url('Invalid success URL').refine(isAppDomainUrl, { message: 'Redirect URL must be on the application domain' }),
+  cancelUrl: z.string().url('Invalid cancel URL').refine(isAppDomainUrl, { message: 'Redirect URL must be on the application domain' }),
   couponCode: z.string().max(50).optional(),
   trialDays: z.number().int().min(0).max(30).optional(),
   billingInterval: billingIntervalSchema.default('monthly'),
@@ -35,7 +49,7 @@ export const createCheckoutSessionSchema = z.object({
 export type CreateCheckoutSessionInput = z.infer<typeof createCheckoutSessionSchema>;
 
 export const createPortalSessionSchema = z.object({
-  returnUrl: z.string().url('Invalid return URL'),
+  returnUrl: z.string().url('Invalid return URL').refine(isAppDomainUrl, { message: 'Return URL must be on the application domain' }),
 });
 
 export type CreatePortalSessionInput = z.infer<typeof createPortalSessionSchema>;

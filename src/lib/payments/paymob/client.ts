@@ -3,7 +3,7 @@
  * Handles authentication and HTTP requests to Paymob API
  */
 
-import { createHmac } from 'crypto';
+import { createHmac, timingSafeEqual } from 'crypto';
 
 // Paymob API base URL
 const PAYMOB_API_URL = 'https://accept.paymob.com/api';
@@ -109,7 +109,7 @@ export async function paymobRequest<T>(
       'Content-Type': 'application/json',
       ...options.headers,
     },
-    body: options.body ? JSON.stringify(options.body) : undefined,
+    body: options.body ?? undefined,
   });
 
   if (!response.ok) {
@@ -318,12 +318,18 @@ export function verifyWebhookSignature(
     hmacString += value !== undefined ? String(value) : '';
   }
 
-  // Calculate HMAC
-  const calculatedHmac = createHmac('sha512', hmacSecret)
+  // Calculate HMAC and compare as raw byte buffers
+  const calculatedHmacBuf = createHmac('sha512', hmacSecret)
     .update(hmacString)
-    .digest('hex');
+    .digest();
 
-  return calculatedHmac === receivedHmac;
+  const receivedHmacBuf = Buffer.from(receivedHmac, 'hex');
+  if (calculatedHmacBuf.length !== receivedHmacBuf.length) return false;
+  try {
+    return timingSafeEqual(calculatedHmacBuf, receivedHmacBuf);
+  } catch {
+    return false;
+  }
 }
 
 /**

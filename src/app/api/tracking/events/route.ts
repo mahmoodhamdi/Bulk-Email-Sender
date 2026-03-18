@@ -2,17 +2,28 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
 import { listEventsSchema } from '@/lib/validations/tracking';
 import { apiRateLimiter } from '@/lib/rate-limit';
+import { auth } from '@/lib/auth';
 import { ZodError } from 'zod';
 import { Prisma } from '@prisma/client';
 
 /**
  * GET /api/tracking/events
  * List email events with pagination and filtering
+ * Requires authentication - scoped to user's own campaigns
  */
 export async function GET(request: NextRequest) {
   try {
-    // Rate limiting
-    const rateLimitResult = apiRateLimiter.check('tracking-events-list');
+    // Authenticate user first
+    const session = await auth();
+    if (!session?.user?.id) {
+      return NextResponse.json(
+        { error: 'Authentication required' },
+        { status: 401 }
+      );
+    }
+
+    // Rate limiting per user
+    const rateLimitResult = apiRateLimiter.check(`tracking-events-${session.user.id}`);
     if (!rateLimitResult.success) {
       const retryAfter = Math.ceil((rateLimitResult.resetAt - Date.now()) / 1000);
       return NextResponse.json(
@@ -39,8 +50,12 @@ export async function GET(request: NextRequest) {
     const validated = listEventsSchema.parse(params);
     const { page, limit, campaignId, recipientId, type, startDate, endDate, sortBy, sortOrder } = validated;
 
-    // Build where clause
-    const where: Prisma.EmailEventWhereInput = {};
+    // Build where clause - scope to user's campaigns only
+    const where: Prisma.EmailEventWhereInput = {
+      campaign: {
+        userId: session.user.id,
+      },
+    };
     if (campaignId) {
       where.campaignId = campaignId;
     }

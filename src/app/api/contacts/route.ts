@@ -248,7 +248,7 @@ async function handleBulkImport(body: unknown, userId: string) {
           skipDuplicates: true,
         });
         results.created = createResult.count;
-      } catch (err) {
+      } catch (_err) {
         // If batch create fails, fall back to individual creates to track errors
         for (const contactData of contactsToCreate) {
           try {
@@ -298,7 +298,7 @@ async function handleBulkImport(body: unknown, userId: string) {
             })
           );
           results.updated += batch.length;
-        } catch (err) {
+        } catch (_err) {
           // If batch fails, try individual updates
           for (const { id, data, existing } of batch) {
             try {

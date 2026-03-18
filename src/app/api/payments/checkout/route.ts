@@ -11,23 +11,23 @@ import { createCheckoutSessionSchema } from '@/lib/validations/payment';
 import { getPaymentGateway, PaymentProvider, SubscriptionTier, isPaidTier } from '@/lib/payments';
 
 export async function POST(request: NextRequest) {
-  // Rate limiting
-  const rateLimitResult = apiRateLimiter.check('checkout-create');
-  if (!rateLimitResult.success) {
-    const retryAfter = Math.ceil((rateLimitResult.resetAt - Date.now()) / 1000);
-    return NextResponse.json(
-      { error: 'Too many requests', retryAfter },
-      { status: 429 }
-    );
-  }
-
   try {
-    // Authenticate user
+    // Authenticate user first (needed for per-user rate limiting)
     const session = await auth();
     if (!session?.user?.id || !session?.user?.email) {
       return NextResponse.json(
         { error: 'Authentication required' },
         { status: 401 }
+      );
+    }
+
+    // Per-user rate limiting (prevents abuse by individual users)
+    const rateLimitResult = apiRateLimiter.check(`checkout:${session.user.id}`);
+    if (!rateLimitResult.success) {
+      const retryAfter = Math.ceil((rateLimitResult.resetAt - Date.now()) / 1000);
+      return NextResponse.json(
+        { error: 'Too many requests', retryAfter },
+        { status: 429 }
       );
     }
 
