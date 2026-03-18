@@ -177,7 +177,7 @@ describe('Security: Owner Validation', () => {
 
       expect(response.status).toBe(404);
       const data = await response.json();
-      expect(data.error).toContain('not found');
+      expect(data.error.message).toContain('not found');
     });
 
     it('should allow access to own campaign', async () => {

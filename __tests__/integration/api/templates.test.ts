@@ -221,7 +221,7 @@ describe('Templates API Routes', () => {
       const data = await response.json();
 
       expect(response.status).toBe(404);
-      expect(data.error).toBe('Template not found');
+      expect(data.error.message).toBe('Template not found');
     });
   });
 
@@ -388,7 +388,7 @@ describe('Templates API Routes', () => {
       const data = await response.json();
 
       expect(response.status).toBe(404);
-      expect(data.error).toBe('Template not found');
+      expect(data.error.message).toBe('Template not found');
     });
   });
 });

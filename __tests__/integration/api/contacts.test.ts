@@ -171,7 +171,7 @@ describe('Contacts API Routes', () => {
       const data = await response.json();
 
       expect(response.status).toBe(404);
-      expect(data.error).toBe('Contact not found');
+      expect(data.error.message).toBe('Contact not found');
     });
   });
 
@@ -202,7 +202,7 @@ describe('Contacts API Routes', () => {
       const data = await response.json();
 
       expect(response.status).toBe(404);
-      expect(data.error).toBe('Contact not found');
+      expect(data.error.message).toBe('Contact not found');
     });
   });
 });

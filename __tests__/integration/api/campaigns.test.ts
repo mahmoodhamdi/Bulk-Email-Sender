@@ -179,7 +179,7 @@ describe('Campaigns API Routes', () => {
       const data = await response.json();
 
       expect(response.status).toBe(404);
-      expect(data.error).toBe('Campaign not found');
+      expect(data.error.message).toBe('Campaign not found');
     });
   });
 
@@ -224,7 +224,7 @@ describe('Campaigns API Routes', () => {
       const data = await response.json();
 
       expect(response.status).toBe(404);
-      expect(data.error).toBe('Campaign not found');
+      expect(data.error.message).toBe('Campaign not found');
     });
   });
 
@@ -258,7 +258,7 @@ describe('Campaigns API Routes', () => {
       const data = await response.json();
 
       expect(response.status).toBe(404);
-      expect(data.error).toBe('Campaign not found');
+      expect(data.error.message).toBe('Campaign not found');
     });
   });
 });

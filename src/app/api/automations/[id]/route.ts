@@ -11,7 +11,8 @@ import {
   archiveAutomation,
   updateAutomationSchema,
 } from '@/lib/automation';
-import { withAuth, createErrorResponse, AuthContext } from '@/lib/auth';
+import { withAuth, AuthContext } from '@/lib/auth';
+import { apiError, ApiErrors, apiSuccess } from '@/lib/api-response';
 
 interface RouteParams {
   id: string;
@@ -39,7 +40,7 @@ async function validateAutomationOwnership(automationId: string, userId: string)
 export const GET = withAuth(async (request: NextRequest, context: AuthContext, params?: RouteParams) => {
   try {
     if (!params?.id) {
-      return createErrorResponse('ID is required', 400);
+      return apiError('VALIDATION_ERROR', 'ID is required', 400);
     }
     const { id } = params;
 
@@ -47,30 +48,24 @@ export const GET = withAuth(async (request: NextRequest, context: AuthContext, p
     const rateLimitResult = apiRateLimiter.check(`automations-get-${context.userId}-${id}`);
     if (!rateLimitResult.success) {
       const retryAfter = Math.ceil((rateLimitResult.resetAt - Date.now()) / 1000);
-      return NextResponse.json(
-        { error: 'Too many requests', retryAfter },
-        { status: 429 }
-      );
+      return ApiErrors.rateLimited(retryAfter);
     }
 
     // Owner validation - check if automation belongs to the user
     const isOwner = await validateAutomationOwnership(id, context.userId);
     if (!isOwner) {
-      return createErrorResponse('Automation not found', 404);
+      return ApiErrors.notFound('Automation');
     }
 
     const automation = await getAutomation(id);
     if (!automation) {
-      return createErrorResponse('Automation not found', 404);
+      return ApiErrors.notFound('Automation');
     }
 
-    return NextResponse.json({ data: automation });
+    return apiSuccess(automation);
   } catch (error: unknown) {
     console.error('Error getting automation:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    return ApiErrors.internalError();
   }
 }, { requiredPermission: 'automations:read' });
 
@@ -82,7 +77,7 @@ export const GET = withAuth(async (request: NextRequest, context: AuthContext, p
 export const PATCH = withAuth(async (request: NextRequest, context: AuthContext, params?: RouteParams) => {
   try {
     if (!params?.id) {
-      return createErrorResponse('ID is required', 400);
+      return apiError('VALIDATION_ERROR', 'ID is required', 400);
     }
     const { id } = params;
 
@@ -90,16 +85,13 @@ export const PATCH = withAuth(async (request: NextRequest, context: AuthContext,
     const rateLimitResult = apiRateLimiter.check(`automations-update-${context.userId}-${id}`);
     if (!rateLimitResult.success) {
       const retryAfter = Math.ceil((rateLimitResult.resetAt - Date.now()) / 1000);
-      return NextResponse.json(
-        { error: 'Too many requests', retryAfter },
-        { status: 429 }
-      );
+      return ApiErrors.rateLimited(retryAfter);
     }
 
     // Owner validation - check if automation belongs to the user
     const isOwner = await validateAutomationOwnership(id, context.userId);
     if (!isOwner) {
-      return createErrorResponse('Automation not found', 404);
+      return ApiErrors.notFound('Automation');
     }
 
     const body = await request.json();
@@ -109,62 +101,52 @@ export const PATCH = withAuth(async (request: NextRequest, context: AuthContext,
     switch (action) {
       case 'activate': {
         const result = await activateAutomation(id);
-        return NextResponse.json({ data: result });
+        return apiSuccess(result);
       }
 
       case 'pause': {
         const result = await pauseAutomation(id);
-        return NextResponse.json({ data: result });
+        return apiSuccess(result);
       }
 
       case 'archive': {
         const result = await archiveAutomation(id);
-        return NextResponse.json({ data: result });
+        return apiSuccess(result);
       }
 
       default: {
         // Default: update automation settings
         const validated = updateAutomationSchema.parse(data);
         const result = await updateAutomation(id, validated);
-        return NextResponse.json({ data: result });
+        return apiSuccess(result);
       }
     }
   } catch (error: unknown) {
     if (error instanceof ZodError) {
-      return NextResponse.json(
-        { error: 'Validation error', details: error.errors },
-        { status: 400 }
-      );
+      return ApiErrors.validationError({ fields: error.errors });
     }
     if (error instanceof SyntaxError) {
-      return NextResponse.json(
-        { error: 'Invalid JSON body' },
-        { status: 400 }
-      );
+      return ApiErrors.invalidJson();
     }
     if (error instanceof Error) {
-      const errorMessages: Record<string, number> = {
-        'Automation not found': 404,
-        'Cannot update an active automation. Pause it first.': 400,
-        'Automation is already active': 400,
-        'Automation must have at least one step': 400,
-        'Can only pause active automations': 400,
-        'Automation is already archived': 400,
-      };
+      const notFoundMessages = ['Automation not found'];
+      if (notFoundMessages.includes(error.message)) {
+        return ApiErrors.notFound('Automation');
+      }
 
-      const status = errorMessages[error.message];
-      if (status) {
-        return NextResponse.json(
-          { error: error.message },
-          { status }
-        );
+      const invalidOperationMessages = [
+        'Cannot update an active automation. Pause it first.',
+        'Automation is already active',
+        'Automation must have at least one step',
+        'Can only pause active automations',
+        'Automation is already archived',
+      ];
+      if (invalidOperationMessages.includes(error.message)) {
+        return ApiErrors.invalidOperation(error.message);
       }
     }
     console.error('Error updating automation:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    return ApiErrors.internalError();
   }
 }, { requiredPermission: 'automations:write' });
 
@@ -176,7 +158,7 @@ export const PATCH = withAuth(async (request: NextRequest, context: AuthContext,
 export const DELETE = withAuth(async (request: NextRequest, context: AuthContext, params?: RouteParams) => {
   try {
     if (!params?.id) {
-      return createErrorResponse('ID is required', 400);
+      return apiError('VALIDATION_ERROR', 'ID is required', 400);
     }
     const { id } = params;
 
@@ -184,16 +166,13 @@ export const DELETE = withAuth(async (request: NextRequest, context: AuthContext
     const rateLimitResult = apiRateLimiter.check(`automations-delete-${context.userId}-${id}`);
     if (!rateLimitResult.success) {
       const retryAfter = Math.ceil((rateLimitResult.resetAt - Date.now()) / 1000);
-      return NextResponse.json(
-        { error: 'Too many requests', retryAfter },
-        { status: 429 }
-      );
+      return ApiErrors.rateLimited(retryAfter);
     }
 
     // Owner validation - check if automation belongs to the user
     const isOwner = await validateAutomationOwnership(id, context.userId);
     if (!isOwner) {
-      return createErrorResponse('Automation not found', 404);
+      return ApiErrors.notFound('Automation');
     }
 
     await deleteAutomation(id);
@@ -204,15 +183,9 @@ export const DELETE = withAuth(async (request: NextRequest, context: AuthContext
     );
   } catch (error: unknown) {
     if (error instanceof Error && error.message === 'Automation not found') {
-      return NextResponse.json(
-        { error: 'Automation not found' },
-        { status: 404 }
-      );
+      return ApiErrors.notFound('Automation');
     }
     console.error('Error deleting automation:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    return ApiErrors.internalError();
   }
 }, { requiredPermission: 'automations:delete' });

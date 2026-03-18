@@ -8,7 +8,8 @@ import {
   retryDelivery,
   listDeliveriesQuerySchema,
 } from '@/lib/webhook';
-import { withAuth, createErrorResponse, AuthContext } from '@/lib/auth';
+import { withAuth, AuthContext } from '@/lib/auth';
+import { apiError, ApiErrors, apiSuccess } from '@/lib/api-response';
 
 interface RouteParams {
   id: string;
@@ -36,7 +37,7 @@ async function validateWebhookOwnership(webhookId: string, userId: string): Prom
 export const GET = withAuth(async (request: NextRequest, context: AuthContext, params?: RouteParams) => {
   try {
     if (!params?.id) {
-      return createErrorResponse('ID is required', 400);
+      return apiError('VALIDATION_ERROR', 'ID is required', 400);
     }
     const { id } = params;
 
@@ -53,13 +54,13 @@ export const GET = withAuth(async (request: NextRequest, context: AuthContext, p
     // Owner validation - check if webhook belongs to the user
     const isOwner = await validateWebhookOwnership(id, context.userId);
     if (!isOwner) {
-      return createErrorResponse('Webhook not found', 404);
+      return apiError('NOT_FOUND', 'Webhook not found', 404);
     }
 
     // Check if webhook exists
     const webhook = await getWebhook(id);
     if (!webhook) {
-      return createErrorResponse('Webhook not found', 404);
+      return apiError('NOT_FOUND', 'Webhook not found', 404);
     }
 
     // Parse query parameters
@@ -119,7 +120,7 @@ export const GET = withAuth(async (request: NextRequest, context: AuthContext, p
 export const POST = withAuth(async (request: NextRequest, context: AuthContext, params?: RouteParams) => {
   try {
     if (!params?.id) {
-      return createErrorResponse('ID is required', 400);
+      return apiError('VALIDATION_ERROR', 'ID is required', 400);
     }
     const { id } = params;
 
@@ -136,13 +137,13 @@ export const POST = withAuth(async (request: NextRequest, context: AuthContext, 
     // Owner validation - check if webhook belongs to the user
     const isOwner = await validateWebhookOwnership(id, context.userId);
     if (!isOwner) {
-      return createErrorResponse('Webhook not found', 404);
+      return apiError('NOT_FOUND', 'Webhook not found', 404);
     }
 
     // Check if webhook exists
     const webhook = await getWebhook(id);
     if (!webhook) {
-      return createErrorResponse('Webhook not found', 404);
+      return apiError('NOT_FOUND', 'Webhook not found', 404);
     }
 
     // Parse body
@@ -165,14 +166,14 @@ export const POST = withAuth(async (request: NextRequest, context: AuthContext, 
     });
 
     if (!delivery) {
-      return createErrorResponse('Delivery not found', 404);
+      return apiError('NOT_FOUND', 'Delivery not found', 404);
     }
 
     // Retry delivery
     const retriedDelivery = await retryDelivery(deliveryId);
 
     if (!retriedDelivery) {
-      return createErrorResponse('Delivery not found', 404);
+      return apiError('NOT_FOUND', 'Delivery not found', 404);
     }
 
     return NextResponse.json({

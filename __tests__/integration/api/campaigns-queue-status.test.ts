@@ -28,10 +28,13 @@ vi.mock('@/lib/queue', () => ({
 
 import { prisma } from '@/lib/db/prisma';
 import { getCampaignQueueStatus } from '@/lib/queue';
+import { apiRateLimiter } from '@/lib/rate-limit';
 
 describe('Campaign Queue Status API Route', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // Restore default rate limiter behavior after each clear
+    vi.mocked(apiRateLimiter.check).mockReturnValue({ success: true, resetAt: Date.now() + 60000 });
   });
 
   describe('GET /api/campaigns/[id]/queue-status', () => {
@@ -79,7 +82,8 @@ describe('Campaign Queue Status API Route', () => {
       expect(data.data.metrics.delivered).toBe(70);
       expect(data.data.metrics.opened).toBe(35);
       expect(data.data.metrics.clicked).toBe(10);
-      expect(data.data.progress.percentage).toBe(75);
+      // processed = sentCount(75) + bouncedCount(5) = 80, percentage = (80/100)*100 = 80
+      expect(data.data.progress.percentage).toBe(80);
       expect(data.data.progress.processed).toBe(80);
       expect(data.data.progress.remaining).toBe(20);
       expect(data.data.statusBreakdown.PENDING).toBe(25);
@@ -248,7 +252,7 @@ describe('Campaign Queue Status API Route', () => {
       const data = await response.json();
 
       expect(response.status).toBe(404);
-      expect(data.error).toBe('Campaign not found');
+      expect(data.error.message).toBe('Campaign not found');
     });
 
     it('should return 400 for invalid campaign ID', async () => {
@@ -257,13 +261,15 @@ describe('Campaign Queue Status API Route', () => {
       const data = await response.json();
 
       expect(response.status).toBe(400);
-      expect(data.error).toBe('Invalid campaign ID');
+      expect(data.error.message).toBe('Invalid campaign ID');
     });
 
     it('should return 429 when rate limited', async () => {
-      vi.mocked(require('@/lib/rate-limit').apiRateLimiter.check).mockReturnValue({
+      vi.mocked(apiRateLimiter.check).mockReturnValue({
         success: false,
         resetAt: Date.now() + 60000,
+        remaining: 0,
+        current: 101,
       });
 
       const request = new NextRequest('http://localhost:3000/api/campaigns/clxxxxxxxxxxxxxxxxxx/queue-status');

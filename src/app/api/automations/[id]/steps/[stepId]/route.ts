@@ -7,7 +7,8 @@ import {
   removeStep,
   updateStepSchema,
 } from '@/lib/automation';
-import { withAuth, createErrorResponse, AuthContext } from '@/lib/auth';
+import { withAuth, AuthContext } from '@/lib/auth';
+import { apiError, ApiErrors, apiSuccess } from '@/lib/api-response';
 
 interface RouteParams {
   id: string;
@@ -36,10 +37,10 @@ async function validateAutomationOwnership(automationId: string, userId: string)
 export const PATCH = withAuth(async (request: NextRequest, context: AuthContext, params?: RouteParams) => {
   try {
     if (!params?.id) {
-      return createErrorResponse('ID is required', 400);
+      return apiError('VALIDATION_ERROR', 'ID is required', 400);
     }
     if (!params?.stepId) {
-      return createErrorResponse('Step ID is required', 400);
+      return apiError('VALIDATION_ERROR', 'Step ID is required', 400);
     }
     const { id, stepId } = params;
 
@@ -47,16 +48,13 @@ export const PATCH = withAuth(async (request: NextRequest, context: AuthContext,
     const rateLimitResult = apiRateLimiter.check(`automations-step-update-${context.userId}-${stepId}`);
     if (!rateLimitResult.success) {
       const retryAfter = Math.ceil((rateLimitResult.resetAt - Date.now()) / 1000);
-      return NextResponse.json(
-        { error: 'Too many requests', retryAfter },
-        { status: 429 }
-      );
+      return ApiErrors.rateLimited(retryAfter);
     }
 
     // Owner validation - check if automation belongs to the user
     const isOwner = await validateAutomationOwnership(id, context.userId);
     if (!isOwner) {
-      return createErrorResponse('Automation not found', 404);
+      return ApiErrors.notFound('Automation');
     }
 
     // Parse and validate body
@@ -66,39 +64,24 @@ export const PATCH = withAuth(async (request: NextRequest, context: AuthContext,
     // Update step
     const step = await updateStep(stepId, validated);
 
-    return NextResponse.json({ data: step });
+    return apiSuccess(step);
   } catch (error: unknown) {
     if (error instanceof ZodError) {
-      return NextResponse.json(
-        { error: 'Validation error', details: error.errors },
-        { status: 400 }
-      );
+      return ApiErrors.validationError({ fields: error.errors });
     }
     if (error instanceof SyntaxError) {
-      return NextResponse.json(
-        { error: 'Invalid JSON body' },
-        { status: 400 }
-      );
+      return ApiErrors.invalidJson();
     }
     if (error instanceof Error) {
-      const errorMessages: Record<string, number> = {
-        'Step not found': 404,
-        'Cannot update steps of an active automation': 400,
-      };
-
-      const status = errorMessages[error.message];
-      if (status) {
-        return NextResponse.json(
-          { error: error.message },
-          { status }
-        );
+      if (error.message === 'Step not found') {
+        return ApiErrors.notFound('Step');
+      }
+      if (error.message === 'Cannot update steps of an active automation') {
+        return ApiErrors.invalidOperation(error.message);
       }
     }
     console.error('Error updating step:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    return ApiErrors.internalError();
   }
 }, { requiredPermission: 'automations:write' });
 
@@ -110,10 +93,10 @@ export const PATCH = withAuth(async (request: NextRequest, context: AuthContext,
 export const DELETE = withAuth(async (request: NextRequest, context: AuthContext, params?: RouteParams) => {
   try {
     if (!params?.id) {
-      return createErrorResponse('ID is required', 400);
+      return apiError('VALIDATION_ERROR', 'ID is required', 400);
     }
     if (!params?.stepId) {
-      return createErrorResponse('Step ID is required', 400);
+      return apiError('VALIDATION_ERROR', 'Step ID is required', 400);
     }
     const { id, stepId } = params;
 
@@ -121,16 +104,13 @@ export const DELETE = withAuth(async (request: NextRequest, context: AuthContext
     const rateLimitResult = apiRateLimiter.check(`automations-step-delete-${context.userId}-${stepId}`);
     if (!rateLimitResult.success) {
       const retryAfter = Math.ceil((rateLimitResult.resetAt - Date.now()) / 1000);
-      return NextResponse.json(
-        { error: 'Too many requests', retryAfter },
-        { status: 429 }
-      );
+      return ApiErrors.rateLimited(retryAfter);
     }
 
     // Owner validation - check if automation belongs to the user
     const isOwner = await validateAutomationOwnership(id, context.userId);
     if (!isOwner) {
-      return createErrorResponse('Automation not found', 404);
+      return ApiErrors.notFound('Automation');
     }
 
     await removeStep(stepId);
@@ -141,23 +121,14 @@ export const DELETE = withAuth(async (request: NextRequest, context: AuthContext
     );
   } catch (error: unknown) {
     if (error instanceof Error) {
-      const errorMessages: Record<string, number> = {
-        'Step not found': 404,
-        'Cannot remove steps from an active automation': 400,
-      };
-
-      const status = errorMessages[error.message];
-      if (status) {
-        return NextResponse.json(
-          { error: error.message },
-          { status }
-        );
+      if (error.message === 'Step not found') {
+        return ApiErrors.notFound('Step');
+      }
+      if (error.message === 'Cannot remove steps from an active automation') {
+        return ApiErrors.invalidOperation(error.message);
       }
     }
     console.error('Error removing step:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    return ApiErrors.internalError();
   }
 }, { requiredPermission: 'automations:delete' });

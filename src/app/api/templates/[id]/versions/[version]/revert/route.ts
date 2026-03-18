@@ -5,7 +5,8 @@ import { versionNumberSchema, revertVersionSchema } from '@/lib/validations/temp
 import { apiRateLimiter } from '@/lib/rate-limit';
 import { revertToVersion, getVersion } from '@/lib/template';
 import { ZodError } from 'zod';
-import { withAuth, createErrorResponse, AuthContext } from '@/lib/auth';
+import { withAuth, AuthContext } from '@/lib/auth';
+import { apiError } from '@/lib/api-response';
 
 interface RouteParams {
   id: string;
@@ -37,7 +38,7 @@ async function validateTemplateOwnership(templateId: string, userId: string): Pr
 export const POST = withAuth(async (request: NextRequest, context: AuthContext, params?: RouteParams) => {
   try {
     if (!params?.id || !params?.version) {
-      return createErrorResponse('Template ID and version are required', 400);
+      return apiError('VALIDATION_ERROR', 'Template ID and version are required', 400);
     }
     const { id, version: versionStr } = params;
 
@@ -58,13 +59,13 @@ export const POST = withAuth(async (request: NextRequest, context: AuthContext, 
     // Owner validation - check if template belongs to the user
     const { isOwner, currentVersion } = await validateTemplateOwnership(id, context.userId);
     if (!isOwner) {
-      return createErrorResponse('Template not found', 404);
+      return apiError('NOT_FOUND', 'Template not found', 404);
     }
 
     // Check if target version exists
     const targetVersion = await getVersion(id, version);
     if (!targetVersion) {
-      return createErrorResponse('Version not found', 404);
+      return apiError('NOT_FOUND', 'Version not found', 404);
     }
 
     // Cannot revert to current version
