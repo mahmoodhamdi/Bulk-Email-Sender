@@ -1,6 +1,5 @@
 'use client';
 
-import { useTranslations } from 'next-intl';
 import {
   Type,
   Heading,
@@ -37,7 +36,6 @@ const BLOCKS: BlockItem[] = [
 ];
 
 export function BlockPalette() {
-  const t = useTranslations();
   const { addBlock, setDraggedBlockType, setIsDragging } = useEmailBuilderStore();
 
   const handleDragStart = (e: React.DragEvent, type: BlockType) => {

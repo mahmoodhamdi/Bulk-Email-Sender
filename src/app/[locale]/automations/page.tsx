@@ -8,7 +8,6 @@ import Link from 'next/link';
 
 export default function AutomationsPage() {
   const t = useTranslations('automation');
-  const tNav = useTranslations('nav');
   const { loadAutomations, automations, isLoading } = useAutomationStore();
   const [activeTab, setActiveTab] = useState<'list' | 'stats'>('list');
 
@@ -17,7 +16,7 @@ export default function AutomationsPage() {
   }, [loadAutomations]);
 
   const activeCount = automations.filter((a) => a.status === 'active').length;
-  const totalEmails = automations.reduce((sum, a) => sum + a.stats.emailsSent, 0);
+  const totalEmails = automations.reduce((sum, a) => sum + (a.stats?.emailsSent ?? 0), 0);
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
