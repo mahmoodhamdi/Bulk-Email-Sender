@@ -7,13 +7,13 @@
 
 import { useEffect } from 'react';
 import { useTranslations } from 'next-intl';
+import Link from 'next/link';
 import { ExternalLink, Receipt, CheckCircle, XCircle, Clock, RefreshCw } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { cn } from '@/lib/utils';
 import { useBillingStore, formatPrice } from '@/stores/billing-store';
 
 interface PaymentHistoryProps {
@@ -157,7 +157,7 @@ export function PaymentHistory({ className, limit }: PaymentHistoryProps) {
         {limit && paymentHistory.length > limit && (
           <div className="mt-4 text-center">
             <Button variant="outline" asChild>
-              <a href="/billing/history">{t('viewAllPayments')}</a>
+              <Link href="/billing/history">{t('viewAllPayments')}</Link>
             </Button>
           </div>
         )}
