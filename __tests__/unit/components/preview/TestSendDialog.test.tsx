@@ -126,10 +126,8 @@ describe('TestSendDialog', () => {
     render(<TestSendDialog />);
 
     const input = screen.getByPlaceholderText('preview.enterEmail') as HTMLInputElement;
-    await user.type(input, 'email6@example.com');
-
-    const addButton = screen.getByText('preview.add');
-    await user.click(addButton);
+    // The add button is disabled when max emails reached, so trigger via Enter key instead
+    await user.type(input, 'email6@example.com{Enter}');
 
     expect(screen.getByText('preview.maxEmailsReached')).toBeInTheDocument();
   });

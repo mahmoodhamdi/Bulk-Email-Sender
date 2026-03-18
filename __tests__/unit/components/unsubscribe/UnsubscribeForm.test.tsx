@@ -1,49 +1,53 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { UnsubscribeForm } from '@/components/unsubscribe/UnsubscribeForm';
+import { useUnsubscribeStore } from '@/stores/unsubscribe-store';
+
+const defaultStoreMock = {
+  addToSuppression: vi.fn(),
+  isEmailSuppressed: vi.fn(() => false),
+  error: null,
+  clearError: vi.fn(),
+  isLoading: false,
+  searchQuery: '',
+  reasonFilter: 'all',
+  sourceFilter: 'all',
+  dateRange: '7d',
+  selectedIds: [],
+  currentPage: 1,
+  pageSize: 25,
+  loadSuppressionList: vi.fn(),
+  setSearchQuery: vi.fn(),
+  setReasonFilter: vi.fn(),
+  setSourceFilter: vi.fn(),
+  setDateRange: vi.fn(),
+  clearFilters: vi.fn(),
+  toggleSelection: vi.fn(),
+  selectAll: vi.fn(),
+  clearSelection: vi.fn(),
+  removeFromSuppression: vi.fn(),
+  bulkRemove: vi.fn(),
+  exportSuppression: vi.fn(),
+  getFilteredList: vi.fn(() => []),
+  getPaginatedList: vi.fn(() => []),
+  stats: {
+    totalSuppressed: 0,
+    last7Days: 0,
+    last30Days: 0,
+    trend: 0,
+    byReason: { not_interested: 0, too_frequent: 0, never_subscribed: 0, inappropriate_content: 0, other: 0 },
+    bySource: { link: 0, manual: 0, import: 0, bounce: 0, complaint: 0 },
+  },
+};
 
 vi.mock('@/stores/unsubscribe-store', () => ({
-  useUnsubscribeStore: () => ({
-    addToSuppression: vi.fn(),
-    isEmailSuppressed: vi.fn(() => false),
-    error: null,
-    clearError: vi.fn(),
-    isLoading: false,
-    searchQuery: '',
-    reasonFilter: 'all',
-    sourceFilter: 'all',
-    dateRange: '7d',
-    selectedIds: [],
-    currentPage: 1,
-    pageSize: 25,
-    loadSuppressionList: vi.fn(),
-    setSearchQuery: vi.fn(),
-    setReasonFilter: vi.fn(),
-    setSourceFilter: vi.fn(),
-    setDateRange: vi.fn(),
-    clearFilters: vi.fn(),
-    toggleSelection: vi.fn(),
-    selectAll: vi.fn(),
-    clearSelection: vi.fn(),
-    removeFromSuppression: vi.fn(),
-    bulkRemove: vi.fn(),
-    exportSuppression: vi.fn(),
-    getFilteredList: vi.fn(() => []),
-    getPaginatedList: vi.fn(() => []),
-    stats: {
-      totalSuppressed: 0,
-      last7Days: 0,
-      last30Days: 0,
-      trend: 0,
-      byReason: { not_interested: 0, too_frequent: 0, never_subscribed: 0, inappropriate_content: 0, other: 0 },
-      bySource: { link: 0, manual: 0, import: 0, bounce: 0, complaint: 0 },
-    },
-  }),
+  useUnsubscribeStore: vi.fn(),
 }));
 
 describe('UnsubscribeForm', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(useUnsubscribeStore).mockReturnValue(defaultStoreMock as any);
   });
 
   it('renders confirm step initially', () => {
@@ -142,43 +146,10 @@ describe('UnsubscribeForm', () => {
   });
 
   it('shows already unsubscribed state when email is suppressed', () => {
-    const mockIsEmailSuppressed = vi.fn(() => true);
-    vi.mocked(require('@/stores/unsubscribe-store').useUnsubscribeStore).mockReturnValueOnce({
-      addToSuppression: vi.fn(),
-      isEmailSuppressed: mockIsEmailSuppressed,
-      error: null,
-      clearError: vi.fn(),
-      isLoading: false,
-      searchQuery: '',
-      reasonFilter: 'all',
-      sourceFilter: 'all',
-      dateRange: '7d',
-      selectedIds: [],
-      currentPage: 1,
-      pageSize: 25,
-      loadSuppressionList: vi.fn(),
-      setSearchQuery: vi.fn(),
-      setReasonFilter: vi.fn(),
-      setSourceFilter: vi.fn(),
-      setDateRange: vi.fn(),
-      clearFilters: vi.fn(),
-      toggleSelection: vi.fn(),
-      selectAll: vi.fn(),
-      clearSelection: vi.fn(),
-      removeFromSuppression: vi.fn(),
-      bulkRemove: vi.fn(),
-      exportSuppression: vi.fn(),
-      getFilteredList: vi.fn(() => []),
-      getPaginatedList: vi.fn(() => []),
-      stats: {
-        totalSuppressed: 0,
-        last7Days: 0,
-        last30Days: 0,
-        trend: 0,
-        byReason: { not_interested: 0, too_frequent: 0, never_subscribed: 0, inappropriate_content: 0, other: 0 },
-        bySource: { link: 0, manual: 0, import: 0, bounce: 0, complaint: 0 },
-      },
-    });
+    vi.mocked(useUnsubscribeStore).mockReturnValueOnce({
+      ...defaultStoreMock,
+      isEmailSuppressed: vi.fn(() => true),
+    } as any);
 
     render(<UnsubscribeForm email="test@example.com" />);
     expect(screen.getByText('unsubscribe.alreadyUnsubscribed')).toBeInTheDocument();

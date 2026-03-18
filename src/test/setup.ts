@@ -18,7 +18,10 @@ vi.mock('next/navigation', () => ({
 
 // Mock next-intl
 vi.mock('next-intl', () => ({
-  useTranslations: () => (key: string) => key,
+  useTranslations: (namespace?: string) => {
+    const t = (key: string) => (namespace ? `${namespace}.${key}` : key);
+    return t;
+  },
   useLocale: () => 'en',
   useMessages: () => ({}),
   NextIntlClientProvider: ({ children }: { children: React.ReactNode }) => children,

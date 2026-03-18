@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ABTestResults } from '@/components/ab-testing/ABTestResults';
-import { createEmptyTest, type ABTest, type ABVariant } from '@/stores/ab-test-store';
+import type { ABTest, ABVariant } from '@/stores/ab-test-store';
 
 // Create a test variant with stats
 const createTestVariant = (name: string, sent: number = 100): ABVariant => ({
@@ -13,6 +13,29 @@ const createTestVariant = (name: string, sent: number = 100): ABVariant => ({
   clicked: Math.floor(sent * 0.1),
   converted: Math.floor(sent * 0.05),
 });
+
+// Define createEmptyTest locally to avoid vi.mock hoisting issue
+function createEmptyTest(campaignId: string): ABTest {
+  return {
+    id: 'test-id',
+    campaignId,
+    name: 'A/B Test',
+    testType: 'subject',
+    variants: [
+      { id: 'variant-a', name: 'Variant A', sent: 0, opened: 0, clicked: 0, converted: 0 },
+      { id: 'variant-b', name: 'Variant B', sent: 0, opened: 0, clicked: 0, converted: 0 },
+    ],
+    sampleSize: 20,
+    winnerCriteria: 'openRate',
+    testDuration: 4,
+    autoSelectWinner: true,
+    status: 'draft',
+    winnerId: null,
+    startedAt: null,
+    completedAt: null,
+    createdAt: new Date(),
+  };
+}
 
 // Mock the store
 const mockStore = {
@@ -40,7 +63,25 @@ const mockStore = {
 
 vi.mock('@/stores/ab-test-store', () => ({
   useABTestStore: () => mockStore,
-  createEmptyTest,
+  createEmptyTest: () => ({
+    id: 'test-id',
+    campaignId: 'campaign-123',
+    name: 'A/B Test',
+    testType: 'subject',
+    variants: [
+      { id: 'variant-a', name: 'Variant A', sent: 0, opened: 0, clicked: 0, converted: 0 },
+      { id: 'variant-b', name: 'Variant B', sent: 0, opened: 0, clicked: 0, converted: 0 },
+    ],
+    sampleSize: 20,
+    winnerCriteria: 'openRate',
+    testDuration: 4,
+    autoSelectWinner: true,
+    status: 'draft',
+    winnerId: null,
+    startedAt: null,
+    completedAt: null,
+    createdAt: new Date(),
+  }),
 }));
 
 describe('ABTestResults Component', () => {
@@ -91,9 +132,10 @@ describe('ABTestResults Component', () => {
 
       render(<ABTestResults />);
 
-      // Check for variant names
-      expect(screen.getByText('A')).toBeInTheDocument();
-      expect(screen.getByText('B')).toBeInTheDocument();
+      // Each variant renders a letter badge and a card title with the variant name.
+      // Use getAllByText since the letter "A" appears in both the badge span and the CardTitle.
+      expect(screen.getAllByText('A').length).toBeGreaterThanOrEqual(1);
+      expect(screen.getAllByText('B').length).toBeGreaterThanOrEqual(1);
 
       // Check for sent count
       expect(screen.getAllByText('100')).toHaveLength(2);
@@ -225,7 +267,6 @@ describe('ABTestResults Component', () => {
     });
 
     it('should show TrendingUp icon for suggested winner when running', () => {
-      const user = userEvent.setup();
       const test = createEmptyTest('campaign-123');
       test.status = 'running';
       test.autoSelectWinner = false;
@@ -334,7 +375,8 @@ describe('ABTestResults Component', () => {
 
       render(<ABTestResults />);
 
-      expect(screen.getByText(/performance/i)).toBeInTheDocument();
+      // Each variant card renders a "performance" label - use getAllByText since there are multiple variants
+      expect(screen.getAllByText(/performance/i).length).toBeGreaterThanOrEqual(1);
     });
   });
 });

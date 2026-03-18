@@ -43,52 +43,28 @@ describe('Health API Route', () => {
       expect(new Date(data.timestamp).toISOString()).toBe(data.timestamp);
     });
 
-    it('should include version from package or default', async () => {
+    it('should not expose version, environment, or uptime', async () => {
       const response = await GET();
       const data = await response.json();
 
-      expect(data.version).toBeDefined();
-      expect(typeof data.version).toBe('string');
+      expect(data.version).toBeUndefined();
+      expect(data.environment).toBeUndefined();
+      expect(data.uptime).toBeUndefined();
     });
 
-    it('should return default version when not set', async () => {
-      delete process.env.npm_package_version;
+    it('should include checks with name and status only', async () => {
       const response = await GET();
       const data = await response.json();
 
-      expect(data.version).toBe('1.0.0');
-    });
-
-    it('should use npm_package_version when set', async () => {
-      process.env.npm_package_version = '2.0.0';
-      const response = await GET();
-      const data = await response.json();
-
-      expect(data.version).toBe('2.0.0');
-    });
-
-    it('should include environment', async () => {
-      const response = await GET();
-      const data = await response.json();
-
-      expect(data.environment).toBeDefined();
-      expect(typeof data.environment).toBe('string');
-    });
-
-    it('should return development environment by default in tests', async () => {
-      delete process.env.NODE_ENV;
-      const response = await GET();
-      const data = await response.json();
-
-      expect(data.environment).toBe('development');
-    });
-
-    it('should return correct environment when set', async () => {
-      process.env.NODE_ENV = 'production';
-      const response = await GET();
-      const data = await response.json();
-
-      expect(data.environment).toBe('production');
+      expect(data.checks).toBeDefined();
+      expect(Array.isArray(data.checks)).toBe(true);
+      for (const check of data.checks) {
+        expect(check.name).toBeDefined();
+        expect(check.status).toBeDefined();
+        // Should not expose latency or error messages publicly
+        expect(check.latency).toBeUndefined();
+        expect(check.message).toBeUndefined();
+      }
     });
 
     it('should return JSON content type', async () => {

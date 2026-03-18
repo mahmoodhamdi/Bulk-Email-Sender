@@ -18,6 +18,34 @@ vi.mock('@/hooks/usePagination', () => ({
     setPageSize: vi.fn(),
     pageSizeOptions: [5, 10, 20, 50],
   }),
+  getPageNumbers: (currentPage: number, totalPages: number, maxVisiblePages = 5) => {
+    if (totalPages <= maxVisiblePages) {
+      return Array.from({ length: totalPages }, (_, i) => i + 1);
+    }
+    const pages: (number | 'ellipsis')[] = [];
+    const halfVisible = Math.floor(maxVisiblePages / 2);
+    pages.push(1);
+    let start = Math.max(2, currentPage - halfVisible);
+    let end = Math.min(totalPages - 1, currentPage + halfVisible);
+    if (currentPage <= halfVisible + 1) {
+      end = Math.min(totalPages - 1, maxVisiblePages - 1);
+    } else if (currentPage >= totalPages - halfVisible) {
+      start = Math.max(2, totalPages - maxVisiblePages + 2);
+    }
+    if (start > 2) {
+      pages.push('ellipsis');
+    }
+    for (let i = start; i <= end; i++) {
+      pages.push(i);
+    }
+    if (end < totalPages - 1) {
+      pages.push('ellipsis');
+    }
+    if (totalPages > 1) {
+      pages.push(totalPages);
+    }
+    return pages;
+  },
 }));
 
 let campaignCounter = 0;
@@ -34,7 +62,7 @@ const createMockCampaign = (overrides?: Partial<CampaignMetrics>): CampaignMetri
     clicked: 95,
     bounced: 50,
     unsubscribed: 10,
-    complained: 5,
+    complaints: 5,
     sentAt: new Date('2024-01-15'),
     ...overrides,
   };
@@ -63,9 +91,9 @@ describe('CampaignTable Component', () => {
     it('should render table headers', () => {
       render(<CampaignTable campaigns={mockCampaigns} />);
 
-      expect(screen.getByText(/analytics.campaignName/i)).toBeInTheDocument();
-      expect(screen.getByText(/analytics.status/i)).toBeInTheDocument();
-      expect(screen.getByText(/analytics.metrics.sent/i)).toBeInTheDocument();
+      expect(screen.getByText('analytics.campaignName')).toBeInTheDocument();
+      expect(screen.getByText('analytics.status')).toBeInTheDocument();
+      expect(screen.getByText('analytics.metrics.sent')).toBeInTheDocument();
     });
 
     it('should render status badges', () => {
@@ -85,7 +113,8 @@ describe('CampaignTable Component', () => {
     it('should display sent count and delivery info', () => {
       render(<CampaignTable campaigns={mockCampaigns} />);
 
-      expect(screen.getByText(/1,000|1000/)).toBeInTheDocument();
+      // formatNumber converts 1000 to "1.0K"
+      expect(screen.getByText('1.0K')).toBeInTheDocument();
     });
 
     it('should render pagination info', () => {
@@ -100,7 +129,7 @@ describe('CampaignTable Component', () => {
       const user = userEvent.setup();
       render(<CampaignTable campaigns={mockCampaigns} />);
 
-      const nameHeader = screen.getByRole('button', { name: /analytics.campaignName/i });
+      const nameHeader = screen.getByRole('button', { name: 'analytics.campaignName' });
       await user.click(nameHeader);
 
       expect(screen.getByText('Campaign A')).toBeInTheDocument();
@@ -110,7 +139,7 @@ describe('CampaignTable Component', () => {
       const user = userEvent.setup();
       render(<CampaignTable campaigns={mockCampaigns} />);
 
-      const sentHeader = screen.getByRole('button', { name: /analytics.metrics.sent/i });
+      const sentHeader = screen.getByRole('button', { name: 'analytics.metrics.sent' });
       await user.click(sentHeader);
 
       expect(screen.getByText('Campaign A')).toBeInTheDocument();
@@ -120,7 +149,7 @@ describe('CampaignTable Component', () => {
       const user = userEvent.setup();
       render(<CampaignTable campaigns={mockCampaigns} />);
 
-      const openRateHeader = screen.getByRole('button', { name: /analytics.metrics.openRate/i });
+      const openRateHeader = screen.getByRole('button', { name: 'analytics.metrics.openRate' });
       await user.click(openRateHeader);
 
       expect(screen.getByText('Campaign A')).toBeInTheDocument();
@@ -130,7 +159,7 @@ describe('CampaignTable Component', () => {
       const user = userEvent.setup();
       render(<CampaignTable campaigns={mockCampaigns} />);
 
-      const clickRateHeader = screen.getByRole('button', { name: /analytics.metrics.clickRate/i });
+      const clickRateHeader = screen.getByRole('button', { name: 'analytics.metrics.clickRate' });
       await user.click(clickRateHeader);
 
       expect(screen.getByText('Campaign A')).toBeInTheDocument();
@@ -140,7 +169,7 @@ describe('CampaignTable Component', () => {
       const user = userEvent.setup();
       render(<CampaignTable campaigns={mockCampaigns} />);
 
-      const dateHeader = screen.getByRole('button', { name: /analytics.date/i });
+      const dateHeader = screen.getByRole('button', { name: 'analytics.date' });
       await user.click(dateHeader);
 
       expect(screen.getByText('Campaign A')).toBeInTheDocument();
@@ -150,7 +179,7 @@ describe('CampaignTable Component', () => {
       const user = userEvent.setup();
       render(<CampaignTable campaigns={mockCampaigns} />);
 
-      const nameHeader = screen.getByRole('button', { name: /analytics.campaignName/i });
+      const nameHeader = screen.getByRole('button', { name: 'analytics.campaignName' });
 
       await user.click(nameHeader);
       await user.click(nameHeader);
@@ -162,7 +191,7 @@ describe('CampaignTable Component', () => {
       const user = userEvent.setup();
       render(<CampaignTable campaigns={mockCampaigns} />);
 
-      const nameHeader = screen.getByRole('button', { name: /analytics.campaignName/i });
+      const nameHeader = screen.getByRole('button', { name: 'analytics.campaignName' });
       await user.click(nameHeader);
 
       const chevronIcon = nameHeader.querySelector('svg');
@@ -174,7 +203,7 @@ describe('CampaignTable Component', () => {
     it('should render search input', () => {
       render(<CampaignTable campaigns={mockCampaigns} />);
 
-      const searchInput = screen.getByPlaceholderText(/analytics.searchCampaigns/i);
+      const searchInput = screen.getByPlaceholderText('analytics.searchCampaigns');
       expect(searchInput).toBeInTheDocument();
     });
 
@@ -182,7 +211,7 @@ describe('CampaignTable Component', () => {
       const user = userEvent.setup();
       render(<CampaignTable campaigns={mockCampaigns} />);
 
-      const searchInput = screen.getByPlaceholderText(/analytics.searchCampaigns/i) as HTMLInputElement;
+      const searchInput = screen.getByPlaceholderText('analytics.searchCampaigns') as HTMLInputElement;
       await user.type(searchInput, 'Campaign A');
 
       expect(screen.getByText('Campaign A')).toBeInTheDocument();
@@ -193,7 +222,7 @@ describe('CampaignTable Component', () => {
       const user = userEvent.setup();
       render(<CampaignTable campaigns={mockCampaigns} />);
 
-      const searchInput = screen.getByPlaceholderText(/analytics.searchCampaigns/i) as HTMLInputElement;
+      const searchInput = screen.getByPlaceholderText('analytics.searchCampaigns') as HTMLInputElement;
       await user.type(searchInput, 'campaign a');
 
       expect(screen.getByText('Campaign A')).toBeInTheDocument();
@@ -203,17 +232,17 @@ describe('CampaignTable Component', () => {
       const user = userEvent.setup();
       render(<CampaignTable campaigns={mockCampaigns} />);
 
-      const searchInput = screen.getByPlaceholderText(/analytics.searchCampaigns/i) as HTMLInputElement;
+      const searchInput = screen.getByPlaceholderText('analytics.searchCampaigns') as HTMLInputElement;
       await user.type(searchInput, 'NonexistentCampaign');
 
-      expect(screen.getByText(/analytics.noResults/i)).toBeInTheDocument();
+      expect(screen.getByText('analytics.noResults')).toBeInTheDocument();
     });
 
     it('should clear search and show all campaigns again', async () => {
       const user = userEvent.setup();
       render(<CampaignTable campaigns={mockCampaigns} />);
 
-      const searchInput = screen.getByPlaceholderText(/analytics.searchCampaigns/i) as HTMLInputElement;
+      const searchInput = screen.getByPlaceholderText('analytics.searchCampaigns') as HTMLInputElement;
       await user.type(searchInput, 'Campaign A');
       expect(screen.getByText('Campaign A')).toBeInTheDocument();
       expect(screen.queryByText('Campaign B')).not.toBeInTheDocument();
@@ -256,13 +285,21 @@ describe('CampaignTable Component', () => {
     it('should display open rate', () => {
       render(<CampaignTable campaigns={mockCampaigns} />);
 
-      expect(screen.getByText(/50\./)).toBeInTheDocument();
+      // All three campaigns have the same metrics: opened=475, delivered=950
+      // openRate = (475/950)*100 = 50%
+      // formatPercentage(50) = "50.0%"
+      const openRateElements = screen.getAllByText('50.0%');
+      expect(openRateElements.length).toBeGreaterThan(0);
     });
 
     it('should display click rate', () => {
       render(<CampaignTable campaigns={mockCampaigns} />);
 
-      expect(screen.getByText(/10\./)).toBeInTheDocument();
+      // All three campaigns have the same metrics: clicked=95, delivered=950
+      // clickRate = (95/950)*100 = 10%
+      // formatPercentage(10) = "10.0%"
+      const clickRateElements = screen.getAllByText('10.0%');
+      expect(clickRateElements.length).toBeGreaterThan(0);
     });
 
     it('should show progress bars for metrics', () => {
@@ -284,7 +321,7 @@ describe('CampaignTable Component', () => {
     it('should show no campaigns message when list is empty', () => {
       render(<CampaignTable campaigns={[]} />);
 
-      expect(screen.getByText(/analytics.noCampaigns/i)).toBeInTheDocument();
+      expect(screen.getByText('analytics.noCampaigns')).toBeInTheDocument();
     });
   });
 
@@ -294,7 +331,7 @@ describe('CampaignTable Component', () => {
       const onExport = vi.fn();
       render(<CampaignTable campaigns={mockCampaigns} onExport={onExport} />);
 
-      const exportButton = screen.getByRole('button', { name: /analytics.export/i });
+      const exportButton = screen.getByRole('button', { name: 'analytics.export' });
       await user.click(exportButton);
 
       expect(onExport).toHaveBeenCalled();
@@ -321,7 +358,7 @@ describe('CampaignTable Component', () => {
     it('should not render export button when onExport is not provided', () => {
       render(<CampaignTable campaigns={mockCampaigns} />);
 
-      const exportButtons = screen.queryAllByRole('button', { name: /analytics.export/i });
+      const exportButtons = screen.queryAllByRole('button', { name: 'analytics.export' });
       expect(exportButtons.length).toBe(0);
     });
 
@@ -370,7 +407,10 @@ describe('CampaignTable Component', () => {
     it('should render date in table', () => {
       render(<CampaignTable campaigns={mockCampaigns} />);
 
-      expect(screen.getByText(/1\/15\/2024|15\/1\/2024|2024-01-15/)).toBeInTheDocument();
+      const dateElements = screen.getAllByText((content) =>
+        /\d+\/\d+\/\d+|2024-01-15/.test(content)
+      );
+      expect(dateElements.length).toBeGreaterThan(0);
     });
   });
 

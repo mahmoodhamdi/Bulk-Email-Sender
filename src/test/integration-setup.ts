@@ -1,4 +1,5 @@
 import { vi } from 'vitest';
+import { NextResponse } from 'next/server';
 
 // Set up environment variables for testing
 process.env.DATABASE_URL = process.env.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/emailsender_test';
@@ -49,11 +50,9 @@ vi.mock('@/lib/auth', () => ({
     };
   }),
   createErrorResponse: vi.fn((message: string, status: number) => {
-    const { NextResponse } = require('next/server');
     return NextResponse.json({ error: message }, { status });
   }),
   createSuccessResponse: vi.fn((data: unknown, status = 200) => {
-    const { NextResponse } = require('next/server');
     return NextResponse.json(data, { status });
   }),
   generateApiKey: vi.fn(),

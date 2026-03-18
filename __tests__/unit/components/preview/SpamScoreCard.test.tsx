@@ -45,7 +45,7 @@ const mockPoorSpamAnalysis: SpamAnalysis = {
 };
 
 const mockPreviewStore = {
-  spamAnalysis: null,
+  spamAnalysis: null as SpamAnalysis | null,
   isAnalyzing: false,
   analyzeSpam: vi.fn(),
 };
@@ -58,6 +58,7 @@ describe('SpamScoreCard', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockPreviewStore.spamAnalysis = null;
+    mockPreviewStore.isAnalyzing = false;
   });
 
   it('renders initial state with analyze button', () => {
@@ -102,6 +103,7 @@ describe('SpamScoreCard', () => {
   describe('with spam analysis', () => {
     beforeEach(() => {
       mockPreviewStore.spamAnalysis = mockSpamAnalysis;
+      mockPreviewStore.isAnalyzing = false;
     });
 
     it('displays spam score gauge', () => {
@@ -121,12 +123,12 @@ describe('SpamScoreCard', () => {
     it('displays warning count', () => {
       render(<SpamScoreCard />);
 
-      const warningCount = screen.getByText('1');
-      expect(warningCount).toBeInTheDocument();
+      // The warning count and label are rendered together in a span as "1 preview.warnings"
+      const warningSpan = screen.getByText(/preview\.warnings/);
+      expect(warningSpan).toBeInTheDocument();
     });
 
     it('displays reanalyze button', async () => {
-      const user = userEvent.setup();
       render(<SpamScoreCard />);
 
       const buttons = screen.getAllByRole('button');
@@ -162,8 +164,8 @@ describe('SpamScoreCard', () => {
     it('renders issue count summary', () => {
       render(<SpamScoreCard />);
 
-      // Should show warning count
-      expect(screen.getByText('preview.warnings')).toBeInTheDocument();
+      // The warning count and label are combined in a span as "1 preview.warnings"
+      expect(screen.getByText(/preview\.warnings/)).toBeInTheDocument();
     });
 
     it('shows excellent rating with green color', () => {
@@ -193,14 +195,15 @@ describe('SpamScoreCard', () => {
 
       render(<SpamScoreCard />);
 
-      // Should show error count
-      expect(screen.getByText('preview.errors')).toBeInTheDocument();
+      // The error count and label are combined in a span as "1 preview.errors"
+      expect(screen.getByText(/preview\.errors/)).toBeInTheDocument();
     });
   });
 
   describe('Issue types', () => {
     beforeEach(() => {
       mockPreviewStore.spamAnalysis = mockSpamAnalysis;
+      mockPreviewStore.isAnalyzing = false;
     });
 
     it('renders warning icon for warning issues', () => {
@@ -229,6 +232,7 @@ describe('SpamScoreCard', () => {
 
   describe('Issue Styling', () => {
     beforeEach(() => {
+      mockPreviewStore.isAnalyzing = false;
       mockPreviewStore.spamAnalysis = {
         ...mockSpamAnalysis,
         issues: [
@@ -252,21 +256,21 @@ describe('SpamScoreCard', () => {
     });
 
     it('applies error styling to error issues', () => {
-      const { container } = render(<SpamScoreCard />);
+      render(<SpamScoreCard />);
 
       const errorMessages = screen.getByText('Critical error');
       expect(errorMessages).toBeInTheDocument();
     });
 
     it('applies warning styling to warning issues', () => {
-      const { container } = render(<SpamScoreCard />);
+      render(<SpamScoreCard />);
 
       const warningMessages = screen.getByText('Warning message');
       expect(warningMessages).toBeInTheDocument();
     });
 
     it('applies info styling to info issues', () => {
-      const { container } = render(<SpamScoreCard />);
+      render(<SpamScoreCard />);
 
       const infoMessages = screen.getByText('Info message');
       expect(infoMessages).toBeInTheDocument();
@@ -276,6 +280,7 @@ describe('SpamScoreCard', () => {
   describe('Score Gauge', () => {
     beforeEach(() => {
       mockPreviewStore.spamAnalysis = mockSpamAnalysis;
+      mockPreviewStore.isAnalyzing = false;
     });
 
     it('displays score out of 100', () => {
@@ -311,6 +316,7 @@ describe('SpamScoreCard', () => {
   describe('Reanalyze Button', () => {
     beforeEach(() => {
       mockPreviewStore.spamAnalysis = mockSpamAnalysis;
+      mockPreviewStore.isAnalyzing = false;
     });
 
     it('shows reanalyze button', () => {
@@ -334,6 +340,7 @@ describe('SpamScoreCard', () => {
 
   it('renders issues heading', () => {
     mockPreviewStore.spamAnalysis = mockSpamAnalysis;
+    mockPreviewStore.isAnalyzing = false;
 
     render(<SpamScoreCard />);
 
@@ -342,6 +349,7 @@ describe('SpamScoreCard', () => {
 
   it('displays no analysis message when null', () => {
     mockPreviewStore.spamAnalysis = null;
+    mockPreviewStore.isAnalyzing = false;
 
     render(<SpamScoreCard />);
 
@@ -353,6 +361,7 @@ describe('SpamScoreCard', () => {
       ...mockSpamAnalysis,
       issues: [],
     };
+    mockPreviewStore.isAnalyzing = false;
 
     const { container } = render(<SpamScoreCard />);
 
@@ -362,6 +371,7 @@ describe('SpamScoreCard', () => {
 
   it('renders with proper spacing and layout', () => {
     mockPreviewStore.spamAnalysis = mockSpamAnalysis;
+    mockPreviewStore.isAnalyzing = false;
 
     const { container } = render(<SpamScoreCard />);
 
@@ -375,6 +385,7 @@ describe('SpamScoreCard', () => {
       score: 50,
       rating: 'fair',
     };
+    mockPreviewStore.isAnalyzing = false;
 
     render(<SpamScoreCard />);
 

@@ -147,14 +147,15 @@ describe('CheckoutButton Component', () => {
       expect(button).toBeDisabled();
     });
 
-    it('should show loading text', () => {
+    it('should show loading spinner when checking out', () => {
       mockStore.isCheckingOut = true;
 
-      render(
+      const { container } = render(
         <CheckoutButton tier={SubscriptionTier.STARTER} />
       );
 
-      expect(screen.getByRole('button')).toHaveClass('animate-spin');
+      const spinner = container.querySelector('.animate-spin');
+      expect(spinner).toBeInTheDocument();
     });
   });
 
@@ -321,7 +322,8 @@ describe('CheckoutButton Component', () => {
       await user.click(button);
 
       const stripeOption = await screen.findByText(/Credit Card/i);
-      expect(stripeOption).toBeDisabled();
+      // Check for aria-disabled attribute instead of disabled
+      expect(stripeOption).toHaveAttribute('aria-disabled', 'true');
     });
   });
 
@@ -393,9 +395,12 @@ describe('CheckoutButton Component', () => {
       const mockUrl = 'https://checkout.example.com/session123';
       mockStore.createCheckout.mockResolvedValueOnce(mockUrl);
 
-      // Mock window.location
-      delete (window as any).location;
-      window.location = { href: '' } as any;
+      // Mock window.location.assign
+      const mockAssign = vi.fn();
+      Object.defineProperty(window, 'location', {
+        value: { ...window.location, assign: mockAssign },
+        writable: true,
+      });
 
       render(
         <CheckoutButton tier={SubscriptionTier.STARTER} />
