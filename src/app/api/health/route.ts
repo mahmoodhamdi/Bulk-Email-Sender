@@ -10,21 +10,13 @@ interface HealthCheck {
   message?: string;
 }
 
-interface HealthResponse {
-  status: 'healthy' | 'unhealthy' | 'degraded';
-  timestamp: string;
-  version: string;
-  environment: string;
-  uptime: number;
-  checks: HealthCheck[];
-}
-
 /**
  * GET /api/health
- * Comprehensive health check endpoint for monitoring
+ * Health check endpoint for monitoring.
+ * Returns minimal status for public access (load balancers, uptime monitors).
+ * Version, environment, uptime, and detailed checks are omitted to avoid leaking info.
  */
 export async function GET() {
-  const startTime = Date.now();
   const checks: HealthCheck[] = [];
   let overallStatus: 'healthy' | 'unhealthy' | 'degraded' = 'healthy';
 
@@ -41,13 +33,11 @@ export async function GET() {
     if (redisCheck.status === 'unhealthy' && overallStatus === 'healthy') overallStatus = 'degraded';
   }
 
-  const response: HealthResponse = {
+  // Public response: only status and timestamp (no version/env/uptime)
+  const response = {
     status: overallStatus,
     timestamp: new Date().toISOString(),
-    version: process.env.npm_package_version || '1.0.0',
-    environment: process.env.NODE_ENV || 'development',
-    uptime: process.uptime(),
-    checks,
+    checks: checks.map(c => ({ name: c.name, status: c.status })),
   };
 
   const statusCode = overallStatus === 'healthy' ? 200 : overallStatus === 'degraded' ? 200 : 503;
@@ -68,7 +58,7 @@ async function checkDatabase(): Promise<HealthCheck> {
       name: 'database',
       status: 'unhealthy',
       latency: Date.now() - start,
-      message: error instanceof Error ? error.message : 'Database connection failed',
+      message: 'Database connection failed',
     };
   }
 }
@@ -83,14 +73,14 @@ async function checkRedis(): Promise<HealthCheck> {
       name: 'redis',
       status: health.connected ? 'healthy' : 'unhealthy',
       latency: health.latency || Date.now() - start,
-      message: health.error,
+      message: health.connected ? undefined : 'Redis unavailable',
     };
-  } catch (error) {
+  } catch {
     return {
       name: 'redis',
       status: 'degraded',
       latency: Date.now() - start,
-      message: 'Redis check skipped - not configured',
+      message: undefined,
     };
   }
 }

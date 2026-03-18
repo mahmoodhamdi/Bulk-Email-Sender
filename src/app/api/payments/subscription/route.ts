@@ -27,24 +27,24 @@ import {
  * GET /api/payments/subscription
  * Get the current user's subscription details
  */
-export async function GET(request: NextRequest) {
-  // Rate limiting
-  const rateLimitResult = apiRateLimiter.check('subscription-get');
-  if (!rateLimitResult.success) {
-    const retryAfter = Math.ceil((rateLimitResult.resetAt - Date.now()) / 1000);
-    return NextResponse.json(
-      { error: 'Too many requests', retryAfter },
-      { status: 429 }
-    );
-  }
-
+export async function GET(_request: NextRequest) {
   try {
-    // Authenticate user
+    // Authenticate user first
     const session = await auth();
     if (!session?.user?.id) {
       return NextResponse.json(
         { error: 'Authentication required' },
         { status: 401 }
+      );
+    }
+
+    // Rate limiting per user
+    const rateLimitResult = apiRateLimiter.check(`subscription-get:${session.user.id}`);
+    if (!rateLimitResult.success) {
+      const retryAfter = Math.ceil((rateLimitResult.resetAt - Date.now()) / 1000);
+      return NextResponse.json(
+        { error: 'Too many requests', retryAfter },
+        { status: 429 }
       );
     }
 
@@ -135,23 +135,23 @@ export async function GET(request: NextRequest) {
  * Update subscription tier
  */
 export async function PATCH(request: NextRequest) {
-  // Rate limiting
-  const rateLimitResult = apiRateLimiter.check('subscription-update');
-  if (!rateLimitResult.success) {
-    const retryAfter = Math.ceil((rateLimitResult.resetAt - Date.now()) / 1000);
-    return NextResponse.json(
-      { error: 'Too many requests', retryAfter },
-      { status: 429 }
-    );
-  }
-
   try {
-    // Authenticate user
+    // Authenticate user first
     const session = await auth();
     if (!session?.user?.id) {
       return NextResponse.json(
         { error: 'Authentication required' },
         { status: 401 }
+      );
+    }
+
+    // Rate limiting per user
+    const rateLimitResult = apiRateLimiter.check(`subscription-update:${session.user.id}`);
+    if (!rateLimitResult.success) {
+      const retryAfter = Math.ceil((rateLimitResult.resetAt - Date.now()) / 1000);
+      return NextResponse.json(
+        { error: 'Too many requests', retryAfter },
+        { status: 429 }
       );
     }
 
@@ -229,23 +229,23 @@ export async function PATCH(request: NextRequest) {
  * Cancel subscription
  */
 export async function DELETE(request: NextRequest) {
-  // Rate limiting
-  const rateLimitResult = apiRateLimiter.check('subscription-cancel');
-  if (!rateLimitResult.success) {
-    const retryAfter = Math.ceil((rateLimitResult.resetAt - Date.now()) / 1000);
-    return NextResponse.json(
-      { error: 'Too many requests', retryAfter },
-      { status: 429 }
-    );
-  }
-
   try {
-    // Authenticate user
+    // Authenticate user first
     const session = await auth();
     if (!session?.user?.id) {
       return NextResponse.json(
         { error: 'Authentication required' },
         { status: 401 }
+      );
+    }
+
+    // Rate limiting per user
+    const rateLimitResult = apiRateLimiter.check(`subscription-cancel:${session.user.id}`);
+    if (!rateLimitResult.success) {
+      const retryAfter = Math.ceil((rateLimitResult.resetAt - Date.now()) / 1000);
+      return NextResponse.json(
+        { error: 'Too many requests', retryAfter },
+        { status: 429 }
       );
     }
 
@@ -343,24 +343,24 @@ export async function DELETE(request: NextRequest) {
  * POST /api/payments/subscription
  * Resume a canceled subscription (if cancel_at_period_end was true)
  */
-export async function POST(request: NextRequest) {
-  // Rate limiting
-  const rateLimitResult = apiRateLimiter.check('subscription-resume');
-  if (!rateLimitResult.success) {
-    const retryAfter = Math.ceil((rateLimitResult.resetAt - Date.now()) / 1000);
-    return NextResponse.json(
-      { error: 'Too many requests', retryAfter },
-      { status: 429 }
-    );
-  }
-
+export async function POST(_request: NextRequest) {
   try {
-    // Authenticate user
+    // Authenticate user first
     const session = await auth();
     if (!session?.user?.id) {
       return NextResponse.json(
         { error: 'Authentication required' },
         { status: 401 }
+      );
+    }
+
+    // Rate limiting per user
+    const rateLimitResult = apiRateLimiter.check(`subscription-resume:${session.user.id}`);
+    if (!rateLimitResult.success) {
+      const retryAfter = Math.ceil((rateLimitResult.resetAt - Date.now()) / 1000);
+      return NextResponse.json(
+        { error: 'Too many requests', retryAfter },
+        { status: 429 }
       );
     }
 

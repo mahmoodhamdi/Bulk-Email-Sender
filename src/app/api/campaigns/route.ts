@@ -3,7 +3,7 @@ import { prisma } from '@/lib/db/prisma';
 import { createCampaignSchema, listCampaignsSchema } from '@/lib/validations/campaign';
 import { apiRateLimiter } from '@/lib/rate-limit';
 import { sanitizeEmailHtml } from '@/lib/sanitize-server';
-import { withAuth, createErrorResponse, AuthContext } from '@/lib/auth';
+import { withAuth, AuthContext } from '@/lib/auth';
 import { ZodError } from 'zod';
 
 /**

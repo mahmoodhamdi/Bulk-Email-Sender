@@ -96,7 +96,9 @@ export function createCsrfCookie(token: string, options?: { secure?: boolean }):
     `${CSRF_COOKIE_NAME}=${token}`,
     'Path=/',
     'SameSite=Strict',
-    'HttpOnly',
+    // HttpOnly is intentionally NOT set: double-submit cookie pattern requires JS access.
+    // XSS mitigation is handled by the strict CSP nonce policy in security-headers.ts.
+    `Max-Age=${60 * 60 * 24 * 30}`, // 30 days, matching NextAuth session maxAge
   ];
 
   if (secure) {

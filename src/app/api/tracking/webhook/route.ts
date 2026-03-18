@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { timingSafeEqual, createHmac } from 'crypto';
 import { prisma } from '@/lib/db/prisma';
 import { webhookEventSchema, bounceEventSchema, complaintEventSchema } from '@/lib/validations/tracking';
 import { ZodError } from 'zod';
@@ -6,13 +7,74 @@ import { Prisma } from '@prisma/client';
 import { fireEvent, WEBHOOK_EVENTS } from '@/lib/webhook';
 
 /**
+ * Verify inbound webhook signature from email providers.
+ * Checks X-Webhook-Secret (shared secret) or X-Webhook-Signature (HMAC-SHA256).
+ */
+function verifyInboundWebhook(request: NextRequest, rawBody: string): boolean {
+  const webhookSecret = process.env.TRACKING_WEBHOOK_SECRET;
+
+  // If no secret configured, reject all inbound webhooks in production
+  if (!webhookSecret) {
+    if (process.env.NODE_ENV === 'production') {
+      return false;
+    }
+    // Allow in development without auth for testing convenience
+    return true;
+  }
+
+  // Check shared secret header
+  const secretHeader = request.headers.get('x-webhook-secret');
+  if (secretHeader) {
+    try {
+      return timingSafeEqual(
+        Buffer.from(secretHeader),
+        Buffer.from(webhookSecret)
+      );
+    } catch {
+      return false;
+    }
+  }
+
+  // Check HMAC signature header (X-Webhook-Signature: sha256=<hex>)
+  const signatureHeader = request.headers.get('x-webhook-signature');
+  if (signatureHeader) {
+    const expectedSig = createHmac('sha256', webhookSecret)
+      .update(rawBody)
+      .digest('hex');
+    const receivedSig = signatureHeader.replace('sha256=', '');
+    if (expectedSig.length !== receivedSig.length) return false;
+    try {
+      return timingSafeEqual(
+        Buffer.from(expectedSig, 'hex'),
+        Buffer.from(receivedSig, 'hex')
+      );
+    } catch {
+      return false;
+    }
+  }
+
+  return false;
+}
+
+/**
  * POST /api/tracking/webhook
  * Receive webhook events from email providers
  * Supports: SendGrid, Mailgun, Amazon SES, etc.
+ * Requires X-Webhook-Secret or X-Webhook-Signature header for authentication.
  */
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
+    const rawBody = await request.text();
+
+    // Verify webhook authenticity
+    if (!verifyInboundWebhook(request, rawBody)) {
+      return NextResponse.json(
+        { error: 'Invalid or missing webhook signature' },
+        { status: 401 }
+      );
+    }
+
+    const body = JSON.parse(rawBody);
 
     // Handle array of events (common in webhooks)
     const events = Array.isArray(body) ? body : [body];
@@ -234,7 +296,7 @@ async function handleComplaint(
   email: string,
   campaignId?: string,
   recipientId?: string,
-  metadata?: Record<string, unknown>
+  _metadata?: Record<string, unknown>
 ) {
   // Update contact
   await prisma.contact.updateMany({

@@ -1,6 +1,7 @@
 import { Worker, Job } from 'bullmq';
 import { createRedisConnection } from './redis';
 import { prisma } from '../db/prisma';
+import { decryptServerSide, isEncrypted } from '../crypto/server-encryption';
 import {
   createEmailSender,
   type SmtpConfig as SmtpConfigType,
@@ -33,9 +34,7 @@ async function processEmailJob(
   const { data } = job;
   const startTime = Date.now();
 
-  console.log(
-    `[Worker] Processing job ${job.id} for recipient ${data.recipientId}`
-  );
+  console.log(`[Worker] Processing job ${job.id}`);
 
   try {
     // Update recipient status to QUEUED if still PENDING
@@ -80,6 +79,16 @@ async function processEmailJob(
       content += trackingPixel;
     }
 
+    // Decrypt SMTP password if encrypted
+    let smtpPassword = smtpConfig.password;
+    if (isEncrypted(smtpPassword)) {
+      try {
+        smtpPassword = decryptServerSide(smtpPassword);
+      } catch {
+        throw new Error('SMTP configuration error');
+      }
+    }
+
     // Create email sender
     const sender = createEmailSender({
       host: smtpConfig.host,
@@ -87,7 +96,7 @@ async function processEmailJob(
       secure: smtpConfig.secure,
       auth: {
         user: smtpConfig.username,
-        pass: smtpConfig.password,
+        pass: smtpPassword,
       },
     });
 
@@ -187,12 +196,15 @@ async function processEmailJob(
     const isFinalAttempt = job.attemptsMade >= (job.opts.attempts || 3) - 1;
 
     if (isFinalAttempt) {
-      // Update recipient status to FAILED
+      // Update recipient status to FAILED (sanitize error before persisting)
       await prisma.recipient.update({
         where: { id: data.recipientId },
         data: {
           status: 'FAILED',
-          errorMessage,
+          errorMessage: errorMessage
+            .replace(/smtp[s]?:\/\/[^\s]+/gi, '[redacted]')
+            .replace(/\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z]{2,}\b/gi, '[redacted]')
+            .slice(0, 200),
         },
       });
 

@@ -14,26 +14,30 @@ const KEY_LENGTH = 32;      // 256 bits
 // Environment variable name for encryption key
 const ENCRYPTION_KEY_ENV = 'ENCRYPTION_KEY';
 
+// HKDF info string for domain separation
+const HKDF_INFO = 'bulk-email-sender-v1';
+
 /**
  * Get or derive encryption key from environment variable
- * Uses SHA-256 to ensure consistent 32-byte key length
+ * Uses HKDF for proper key derivation with domain separation
  */
 function getEncryptionKey(): Buffer {
   const envKey = process.env[ENCRYPTION_KEY_ENV];
 
   if (!envKey) {
-    // Generate a warning but don't fail - use a derived key from NODE_ENV
-    // This is NOT recommended for production!
-    console.warn(
-      `[Encryption] ${ENCRYPTION_KEY_ENV} not set. Using derived key. ` +
-      'Set ENCRYPTION_KEY environment variable for production security.'
-    );
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error(
+        `[Encryption] ${ENCRYPTION_KEY_ENV} environment variable is required in production. ` +
+        'Generate one with: node -e "console.log(require(\'crypto\').randomBytes(32).toString(\'base64\'))"'
+      );
+    }
+    // Development/test fallback only
     const fallback = `insecure-fallback-key-${process.env.NODE_ENV || 'development'}`;
-    return crypto.createHash('sha256').update(fallback).digest();
+    return Buffer.from(crypto.hkdfSync('sha256', fallback, '', HKDF_INFO, KEY_LENGTH));
   }
 
-  // Hash the provided key to ensure consistent 32-byte length
-  return crypto.createHash('sha256').update(envKey).digest();
+  // Derive key using HKDF for proper key stretching and domain separation
+  return Buffer.from(crypto.hkdfSync('sha256', envKey, '', HKDF_INFO, KEY_LENGTH));
 }
 
 /**
