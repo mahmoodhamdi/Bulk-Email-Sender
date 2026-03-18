@@ -456,13 +456,12 @@ describe('BlockRenderer', () => {
       const { container } = render(<BlockRenderer block={block} index={2} />);
 
       const blockDiv = container.firstChild;
-      const dragEvent = new DragEvent('dragstart', { bubbles: true });
       const setData = vi.fn();
-      Object.defineProperty(dragEvent, 'dataTransfer', {
-        value: { setData },
-      });
+      fireEvent.dragStart(blockDiv!, {
+        dataTransfer: { setData, effectAllowed: 'move' },
+      } as any);
 
-      fireEvent.dragStart(blockDiv!, dragEvent);
+      expect(setData).toHaveBeenCalledWith('blockIndex', '2');
     });
 
     it('handles drop to move block', () => {
@@ -476,13 +475,13 @@ describe('BlockRenderer', () => {
       const { container } = render(<BlockRenderer block={block} index={0} />);
 
       const blockDiv = container.firstChild;
-      const dragEvent = new DragEvent('drop', { bubbles: true });
       const getData = vi.fn(() => '1');
-      Object.defineProperty(dragEvent, 'dataTransfer', {
-        value: { getData },
-      });
+      fireEvent.drop(blockDiv!, {
+        dataTransfer: { getData, dropEffect: 'move' },
+      } as any);
 
-      fireEvent.drop(blockDiv!, dragEvent);
+      expect(getData).toHaveBeenCalledWith('blockIndex');
+      expect(mockEmailBuilderStore.moveBlock).toHaveBeenCalledWith(1, 0);
     });
   });
 

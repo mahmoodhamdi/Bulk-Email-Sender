@@ -404,7 +404,9 @@ describe('Timezone Utilities', () => {
   describe('formatTimezoneDisplay', () => {
     it('should format known timezone', () => {
       const result = formatTimezoneDisplay('America/New_York');
-      expect(result).toBe('Eastern Time (-05:00)');
+      // The offset is calculated dynamically based on current DST status.
+      // America/New_York is UTC-5 (EST) in winter and UTC-4 (EDT) in summer.
+      expect(result).toMatch(/^Eastern Time \(-0[45]:00\)$/);
     });
 
     it('should return id with offset for unknown timezone', () => {

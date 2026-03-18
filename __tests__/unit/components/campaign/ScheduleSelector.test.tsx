@@ -41,6 +41,7 @@ describe('ScheduleSelector', () => {
     mockScheduleStore.sendNow = true;
     mockScheduleStore.selectedDate = null;
     mockScheduleStore.error = null;
+    mockScheduleStore.selectedTimezone = 'America/New_York';
   });
 
   it('renders schedule selector card', () => {
@@ -376,6 +377,9 @@ describe('ScheduleSelector', () => {
   });
 
   it('detects local timezone on mount', () => {
+    // When selectedTimezone is empty, the component calls setSelectedTimezone
+    mockScheduleStore.selectedTimezone = '';
+
     render(<ScheduleSelector />);
 
     // Should auto-detect timezone (mocked to return America/New_York)

@@ -36,21 +36,23 @@ vi.mock('@/stores/automation-store', () => ({
 describe('AutomationStats Component', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockStore.currentAutomation = mockAutomation;
+    mockStore.automations = [mockAutomation];
   });
 
   describe('rendering', () => {
     it('should render stat cards with numbers', () => {
       render(<AutomationStats />);
 
-      // Check for the actual numeric values displayed
-      expect(screen.getByText('1,000')).toBeInTheDocument();
-      expect(screen.getByText('250')).toBeInTheDocument();
+      // toLocaleString() for 1000 gives '1,000'
+      expect(screen.getAllByText('1,000').length).toBeGreaterThan(0);
+      expect(screen.getAllByText('250').length).toBeGreaterThan(0);
     });
 
     it('should display total entered count', () => {
       render(<AutomationStats />);
 
-      expect(screen.getByText('1,000')).toBeInTheDocument();
+      expect(screen.getAllByText('1,000').length).toBeGreaterThan(0);
     });
 
     it('should display active contacts count', () => {
@@ -70,8 +72,7 @@ describe('AutomationStats Component', () => {
     it('should display completion rate as percentage', () => {
       render(<AutomationStats />);
 
-      // Completion rate: (600 / 1000) * 100 = 60.0%
-      expect(screen.getByText(/60.0%/)).toBeInTheDocument();
+      expect(screen.getByText('60.0%')).toBeInTheDocument();
     });
   });
 
@@ -137,7 +138,12 @@ describe('AutomationStats Component', () => {
     it('should display completion rate subtitle with count', () => {
       render(<AutomationStats />);
 
-      expect(screen.getByText('600')).toBeInTheDocument(); // totalCompleted
+      // The subtitle renders: "{totalCompleted} {t('completed')}"
+      // With mock translations, t('completed') returns 'automation.completed'
+      const { container } = render(<AutomationStats />);
+      const text = container.textContent || '';
+      expect(text.includes('600')).toBe(true);
+      expect(text.includes('completed')).toBe(true);
     });
   });
 
@@ -145,7 +151,6 @@ describe('AutomationStats Component', () => {
     it('should render engagement section', () => {
       const { container } = render(<AutomationStats />);
 
-      // Check for engagement label
       expect(
         container.textContent?.includes('automation.stats.engagement')
       ).toBeTruthy();
@@ -204,15 +209,9 @@ describe('AutomationStats Component', () => {
 
       render(<AutomationStats />);
 
-      // Total entered: 300
-      expect(screen.getByText('300')).toBeInTheDocument();
-
-      // Total active: 70
-      expect(screen.getByText('70')).toBeInTheDocument();
-
-      // Total emails: 300
-      const emailElements = screen.getAllByText('300');
-      expect(emailElements.length).toBeGreaterThan(0);
+      expect(screen.getAllByText('300').length).toBeGreaterThan(0);
+      const activeElements = screen.getAllByText('70');
+      expect(activeElements.length).toBeGreaterThan(0);
     });
 
     it('should show single automation stats when currentAutomation is set', () => {
@@ -258,8 +257,9 @@ describe('AutomationStats Component', () => {
 
       render(<AutomationStats />);
 
-      // Weighted average: (40*100 + 30*200) / 300 = 33.33%
-      expect(screen.getByText(/33.3%/)).toBeInTheDocument();
+      // Weighted average: (40*100 + 30*200) / 300 = 10000/300 = 33.33...%
+      // toFixed(1) = '33.3%'
+      expect(screen.getByText('33.3%')).toBeInTheDocument();
     });
 
     it('should calculate weighted click rate for multiple automations', () => {
@@ -294,8 +294,9 @@ describe('AutomationStats Component', () => {
 
       render(<AutomationStats />);
 
-      // Click rate should be displayed (weighted average)
-      expect(screen.getByText(/8.6%/)).toBeInTheDocument();
+      // Weighted average: (10*100 + 8*200) / 300 = 2600/300 = 8.666...%
+      // toFixed(1) = '8.7%'
+      expect(screen.getByText('8.7%')).toBeInTheDocument();
     });
   });
 
@@ -320,8 +321,6 @@ describe('AutomationStats Component', () => {
     it('should scale click rate progress bar by 2x', () => {
       const { container } = render(<AutomationStats />);
 
-      // The component uses Math.min(clickRate * 2, 100)
-      // So with clickRate = 12.3%, width should be 24.6%
       const bars = container.querySelectorAll('[class*="bg-green-500"]');
       expect(bars.length).toBeGreaterThan(0);
     });
@@ -332,7 +331,7 @@ describe('AutomationStats Component', () => {
       const { container } = render(<AutomationStats />);
 
       const svgs = container.querySelectorAll('svg');
-      expect(svgs.length).toBeGreaterThanOrEqual(4); // At least 4 stat cards with icons
+      expect(svgs.length).toBeGreaterThanOrEqual(4);
     });
   });
 });

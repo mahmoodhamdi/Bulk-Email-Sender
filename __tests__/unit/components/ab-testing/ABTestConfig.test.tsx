@@ -2,7 +2,38 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ABTestConfig } from '@/components/ab-testing/ABTestConfig';
-import { createEmptyTest, type ABTest } from '@/stores/ab-test-store';
+import type { ABTest, ABVariant } from '@/stores/ab-test-store';
+
+// Define createEmptyTest locally to avoid vi.mock hoisting issue
+function makeVariant(name: string): ABVariant {
+  return {
+    id: `variant-${name}`,
+    name,
+    sent: 0,
+    opened: 0,
+    clicked: 0,
+    converted: 0,
+  };
+}
+
+function createEmptyTest(campaignId: string): ABTest {
+  return {
+    id: 'test-id',
+    campaignId,
+    name: 'A/B Test',
+    testType: 'subject',
+    variants: [makeVariant('Variant A'), makeVariant('Variant B')],
+    sampleSize: 20,
+    winnerCriteria: 'openRate',
+    testDuration: 4,
+    autoSelectWinner: true,
+    status: 'draft',
+    winnerId: null,
+    startedAt: null,
+    completedAt: null,
+    createdAt: new Date(),
+  };
+}
 
 // Mock the store
 const mockStore = {
@@ -30,7 +61,25 @@ const mockStore = {
 
 vi.mock('@/stores/ab-test-store', () => ({
   useABTestStore: () => mockStore,
-  createEmptyTest,
+  createEmptyTest: () => ({
+    id: 'test-id',
+    campaignId: 'campaign-123',
+    name: 'A/B Test',
+    testType: 'subject',
+    variants: [
+      { id: 'variant-Variant A', name: 'Variant A', sent: 0, opened: 0, clicked: 0, converted: 0 },
+      { id: 'variant-Variant B', name: 'Variant B', sent: 0, opened: 0, clicked: 0, converted: 0 },
+    ],
+    sampleSize: 20,
+    winnerCriteria: 'openRate',
+    testDuration: 4,
+    autoSelectWinner: true,
+    status: 'draft',
+    winnerId: null,
+    startedAt: null,
+    completedAt: null,
+    createdAt: new Date(),
+  }),
 }));
 
 describe('ABTestConfig Component', () => {
@@ -126,7 +175,7 @@ describe('ABTestConfig Component', () => {
       const addVariantButton = Array.from(addButtons).find((btn) =>
         btn.textContent?.includes('abTest.addVariant')
       );
-      expect(addVariantButton).not.toBeInTheDocument();
+      expect(addVariantButton).toBeUndefined();
     });
 
     it('should show remove button only when more than 2 variants exist', () => {
@@ -205,28 +254,25 @@ describe('ABTestConfig Component', () => {
       expect(slider.max).toBe('50');
     });
 
-    it('should update sample size when slider changes', async () => {
-      const user = userEvent.setup();
+    it('should update sample size when slider changes', () => {
       const test = createEmptyTest('campaign-123');
       mockStore.currentTest = test;
 
       render(<ABTestConfig campaignId="campaign-123" />);
 
       const slider = screen.getByRole('slider', { name: '' }) as HTMLInputElement;
-      await user.clear(slider);
-      await user.type(slider, '30');
+      fireEvent.change(slider, { target: { value: '30' } });
 
-      expect(mockStore.setSampleSize).toHaveBeenCalled();
+      expect(mockStore.setSampleSize).toHaveBeenCalledWith(30);
     });
 
     it('should render test duration input', () => {
       const test = createEmptyTest('campaign-123');
       mockStore.currentTest = test;
 
-      render(<ABTestConfig campaignId="campaign-123" />);
+      const { container } = render(<ABTestConfig campaignId="campaign-123" />);
 
-      const inputs = screen.getAllByRole('textbox');
-      const durationInput = inputs.find((input) => (input as HTMLInputElement).type === 'number');
+      const durationInput = container.querySelector('input[type="number"]');
       expect(durationInput).toBeInTheDocument();
     });
 
@@ -300,16 +346,14 @@ describe('ABTestConfig Component', () => {
   });
 
   describe('test name input', () => {
-    it('should update test name when input changes', async () => {
-      const user = userEvent.setup();
+    it('should update test name when input changes', () => {
       const test = createEmptyTest('campaign-123');
       mockStore.currentTest = test;
 
       render(<ABTestConfig campaignId="campaign-123" />);
 
       const testNameInput = screen.getByDisplayValue(test.name) as HTMLInputElement;
-      await user.clear(testNameInput);
-      await user.type(testNameInput, 'New Test Name');
+      fireEvent.change(testNameInput, { target: { value: 'New Test Name' } });
 
       expect(mockStore.updateTest).toHaveBeenCalledWith({ name: 'New Test Name' });
     });

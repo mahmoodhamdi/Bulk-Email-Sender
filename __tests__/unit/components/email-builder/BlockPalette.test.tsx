@@ -133,8 +133,9 @@ describe('BlockPalette', () => {
     render(<BlockPalette />);
 
     const textButton = screen.getByText('Text').closest('button');
-    const event = new DragEvent('dragstart', { bubbles: true });
-    fireEvent.dragStart(textButton!, event);
+    fireEvent.dragStart(textButton!, {
+      dataTransfer: { setData: vi.fn() },
+    } as any);
 
     expect(mockEmailBuilderStore.setDraggedBlockType).toHaveBeenCalled();
     expect(mockEmailBuilderStore.setIsDragging).toHaveBeenCalled();

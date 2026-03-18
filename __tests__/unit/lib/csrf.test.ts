@@ -195,9 +195,9 @@ describe('CSRF Protection', () => {
       expect(cookie).toContain('SameSite=Strict');
     });
 
-    it('should set HttpOnly', () => {
+    it('should not set HttpOnly (needed for double-submit pattern)', () => {
       const cookie = createCsrfCookie('token', { secure: false });
-      expect(cookie).toContain('HttpOnly');
+      expect(cookie).not.toContain('HttpOnly');
     });
 
     it('should set Secure when secure option is true', () => {
