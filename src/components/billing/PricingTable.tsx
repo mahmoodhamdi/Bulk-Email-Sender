@@ -51,7 +51,7 @@ export function PricingTable({
     } else {
       const url = await createCheckout(tier, undefined, billingInterval);
       if (url) {
-        window.location.href = url;
+        window.location.assign(url);
       }
     }
   };

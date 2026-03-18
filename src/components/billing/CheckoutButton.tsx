@@ -22,7 +22,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { cn } from '@/lib/utils';
 import { SubscriptionTier, PaymentProvider } from '@/lib/payments/types';
 import { useBillingStore } from '@/stores/billing-store';
 
@@ -43,13 +42,6 @@ const PROVIDER_LABELS: Record<PaymentProvider, string> = {
   [PaymentProvider.PADDLE]: 'Paddle (Global)',
 };
 
-const PROVIDER_ICONS: Record<PaymentProvider, string> = {
-  [PaymentProvider.STRIPE]: '/icons/stripe.svg',
-  [PaymentProvider.PAYMOB]: '/icons/paymob.svg',
-  [PaymentProvider.PAYTABS]: '/icons/paytabs.svg',
-  [PaymentProvider.PADDLE]: '/icons/paddle.svg',
-};
-
 export function CheckoutButton({
   tier,
   billingInterval = 'monthly',
@@ -67,7 +59,7 @@ export function CheckoutButton({
   const handleCheckout = async (provider?: PaymentProvider) => {
     const url = await createCheckout(tier, provider, billingInterval);
     if (url) {
-      window.location.href = url;
+      window.location.assign(url);
     } else if (checkoutError) {
       setShowErrorDialog(true);
     }
