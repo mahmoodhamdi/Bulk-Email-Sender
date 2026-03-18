@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
 import { apiRateLimiter } from '@/lib/rate-limit';
-import { withAuth, createErrorResponse, AuthContext } from '@/lib/auth';
+import { withAuth, AuthContext } from '@/lib/auth';
+import { apiError, ApiErrors } from '@/lib/api-response';
 import { getCampaignQueueStatus } from '@/lib/queue';
 
 interface RouteParams {
@@ -15,7 +16,7 @@ interface RouteParams {
 export const GET = withAuth(async (request: NextRequest, context: AuthContext, params?: RouteParams) => {
   try {
     if (!params?.id) {
-      return createErrorResponse('Campaign ID is required', 400);
+      return apiError('VALIDATION_ERROR', 'Campaign ID is required', 400);
     }
 
     const { id: campaignId } = params;
@@ -31,7 +32,7 @@ export const GET = withAuth(async (request: NextRequest, context: AuthContext, p
 
     // Validate campaign ID
     if (!campaignId || campaignId.length < 20) {
-      return createErrorResponse('Invalid campaign ID', 400);
+      return apiError('VALIDATION_ERROR', 'Invalid campaign ID', 400);
     }
 
     // Check if campaign exists AND belongs to the user (owner validation)
@@ -57,7 +58,7 @@ export const GET = withAuth(async (request: NextRequest, context: AuthContext, p
     });
 
     if (!campaign) {
-      return createErrorResponse('Campaign not found', 404);
+      return ApiErrors.notFound('Campaign');
     }
 
     // Get queue status
@@ -130,9 +131,6 @@ export const GET = withAuth(async (request: NextRequest, context: AuthContext, p
     });
   } catch (error: unknown) {
     console.error('Queue status error:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    return ApiErrors.internalError();
   }
 }, { requiredPermission: 'campaigns:read' });

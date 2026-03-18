@@ -17,7 +17,8 @@ import {
   addVariantSchema,
   updateVariantSchema,
 } from '@/lib/ab-test';
-import { withAuth, createErrorResponse, AuthContext } from '@/lib/auth';
+import { withAuth, AuthContext } from '@/lib/auth';
+import { apiError, ApiErrors } from '@/lib/api-response';
 
 interface RouteParams {
   id: string;
@@ -45,7 +46,7 @@ async function validateABTestOwnership(testId: string, userId: string): Promise<
 export const GET = withAuth(async (request: NextRequest, context: AuthContext, params?: RouteParams) => {
   try {
     if (!params?.id) {
-      return createErrorResponse('ID is required', 400);
+      return apiError('VALIDATION_ERROR', 'ID is required', 400);
     }
     const { id } = params;
 
@@ -62,21 +63,18 @@ export const GET = withAuth(async (request: NextRequest, context: AuthContext, p
     // Owner validation - check if test belongs to the user
     const isOwner = await validateABTestOwnership(id, context.userId);
     if (!isOwner) {
-      return createErrorResponse('A/B test not found', 404);
+      return ApiErrors.notFound('A/B test');
     }
 
     const abTest = await getABTest(id);
     if (!abTest) {
-      return createErrorResponse('A/B test not found', 404);
+      return ApiErrors.notFound('A/B test');
     }
 
     return NextResponse.json({ data: abTest });
   } catch (error: unknown) {
     console.error('Error getting A/B test:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    return ApiErrors.internalError();
   }
 }, { requiredPermission: 'ab-tests:read' });
 
@@ -88,7 +86,7 @@ export const GET = withAuth(async (request: NextRequest, context: AuthContext, p
 export const PATCH = withAuth(async (request: NextRequest, context: AuthContext, params?: RouteParams) => {
   try {
     if (!params?.id) {
-      return createErrorResponse('ID is required', 400);
+      return apiError('VALIDATION_ERROR', 'ID is required', 400);
     }
     const { id } = params;
 
@@ -105,7 +103,7 @@ export const PATCH = withAuth(async (request: NextRequest, context: AuthContext,
     // Owner validation - check if test belongs to the user
     const isOwner = await validateABTestOwnership(id, context.userId);
     if (!isOwner) {
-      return createErrorResponse('A/B test not found', 404);
+      return ApiErrors.notFound('A/B test');
     }
 
     const body = await request.json();
@@ -215,10 +213,7 @@ export const PATCH = withAuth(async (request: NextRequest, context: AuthContext,
       }
     }
     console.error('Error updating A/B test:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    return ApiErrors.internalError();
   }
 }, { requiredPermission: 'ab-tests:write' });
 
@@ -230,7 +225,7 @@ export const PATCH = withAuth(async (request: NextRequest, context: AuthContext,
 export const DELETE = withAuth(async (request: NextRequest, context: AuthContext, params?: RouteParams) => {
   try {
     if (!params?.id) {
-      return createErrorResponse('ID is required', 400);
+      return apiError('VALIDATION_ERROR', 'ID is required', 400);
     }
     const { id } = params;
 
@@ -247,7 +242,7 @@ export const DELETE = withAuth(async (request: NextRequest, context: AuthContext
     // Owner validation - check if test belongs to the user
     const isOwner = await validateABTestOwnership(id, context.userId);
     if (!isOwner) {
-      return createErrorResponse('A/B test not found', 404);
+      return ApiErrors.notFound('A/B test');
     }
 
     await deleteABTest(id);
@@ -258,15 +253,9 @@ export const DELETE = withAuth(async (request: NextRequest, context: AuthContext
     );
   } catch (error: unknown) {
     if (error instanceof Error && error.message === 'A/B test not found') {
-      return NextResponse.json(
-        { error: 'A/B test not found' },
-        { status: 404 }
-      );
+      return ApiErrors.notFound('A/B test');
     }
     console.error('Error deleting A/B test:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    return ApiErrors.internalError();
   }
 }, { requiredPermission: 'ab-tests:delete' });

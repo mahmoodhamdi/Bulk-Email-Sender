@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
 import { updateContactSchema, contactIdSchema } from '@/lib/validations/contact';
 import { apiRateLimiter } from '@/lib/rate-limit';
-import { withAuth, createErrorResponse, AuthContext } from '@/lib/auth';
+import { withAuth, AuthContext } from '@/lib/auth';
+import { apiError, ApiErrors } from '@/lib/api-response';
 import { ZodError } from 'zod';
 
 interface RouteParams {
@@ -17,7 +18,7 @@ interface RouteParams {
 export const GET = withAuth(async (request: NextRequest, context: AuthContext, params?: RouteParams) => {
   try {
     if (!params?.id) {
-      return createErrorResponse('ID is required', 400);
+      return apiError('VALIDATION_ERROR', 'ID is required', 400);
     }
     const { id } = params;
 
@@ -70,7 +71,7 @@ export const GET = withAuth(async (request: NextRequest, context: AuthContext, p
     });
 
     if (!contact) {
-      return createErrorResponse('Contact not found', 404);
+      return ApiErrors.notFound('Contact');
     }
 
     return NextResponse.json({ data: contact });
@@ -82,10 +83,7 @@ export const GET = withAuth(async (request: NextRequest, context: AuthContext, p
       );
     }
     console.error('Error getting contact:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    return ApiErrors.internalError();
   }
 }, { requiredPermission: 'contacts:read' });
 
@@ -97,7 +95,7 @@ export const GET = withAuth(async (request: NextRequest, context: AuthContext, p
 export const PUT = withAuth(async (request: NextRequest, context: AuthContext, params?: RouteParams) => {
   try {
     if (!params?.id) {
-      return createErrorResponse('ID is required', 400);
+      return apiError('VALIDATION_ERROR', 'ID is required', 400);
     }
     const { id } = params;
 
@@ -124,7 +122,7 @@ export const PUT = withAuth(async (request: NextRequest, context: AuthContext, p
     });
 
     if (!existing) {
-      return createErrorResponse('Contact not found', 404);
+      return ApiErrors.notFound('Contact');
     }
 
     // Parse and validate body
@@ -141,10 +139,7 @@ export const PUT = withAuth(async (request: NextRequest, context: AuthContext, p
         },
       });
       if (emailExists) {
-        return NextResponse.json(
-          { error: 'Contact with this email already exists' },
-          { status: 409 }
-        );
+        return apiError('CONFLICT', 'Contact with this email already exists', 409);
       }
     }
 
@@ -188,10 +183,7 @@ export const PUT = withAuth(async (request: NextRequest, context: AuthContext, p
       );
     }
     console.error('Error updating contact:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    return ApiErrors.internalError();
   }
 }, { requiredPermission: 'contacts:write' });
 
@@ -203,7 +195,7 @@ export const PUT = withAuth(async (request: NextRequest, context: AuthContext, p
 export const DELETE = withAuth(async (request: NextRequest, context: AuthContext, params?: RouteParams) => {
   try {
     if (!params?.id) {
-      return createErrorResponse('ID is required', 400);
+      return apiError('VALIDATION_ERROR', 'ID is required', 400);
     }
     const { id } = params;
 
@@ -230,7 +222,7 @@ export const DELETE = withAuth(async (request: NextRequest, context: AuthContext
     });
 
     if (!existing) {
-      return createErrorResponse('Contact not found', 404);
+      return ApiErrors.notFound('Contact');
     }
 
     // Delete contact (cascades to list memberships)
@@ -247,9 +239,6 @@ export const DELETE = withAuth(async (request: NextRequest, context: AuthContext
       );
     }
     console.error('Error deleting contact:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    return ApiErrors.internalError();
   }
 }, { requiredPermission: 'contacts:delete' });

@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
+import { ZodError } from 'zod';
 import { GET, POST } from '@/app/api/ab-tests/route';
 
 // Mock Prisma
@@ -27,16 +28,21 @@ vi.mock('@/lib/ab-test', () => ({
   createABTest: vi.fn(),
   listABTests: vi.fn(),
   createABTestSchema: {
-    parse: (data: unknown) => data,
+    parse: vi.fn((data: unknown) => data),
   },
 }));
 
 import { prisma } from '@/lib/db/prisma';
-import { createABTest, listABTests } from '@/lib/ab-test';
+import { createABTest, listABTests, createABTestSchema } from '@/lib/ab-test';
+import { apiRateLimiter } from '@/lib/rate-limit';
 
 describe('A/B Tests API Routes', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // Restore default rate limiter behavior after each clear
+    vi.mocked(apiRateLimiter.check).mockReturnValue({ success: true, resetAt: Date.now() + 60000 });
+    // Restore default schema parse behavior
+    vi.mocked(createABTestSchema.parse).mockImplementation((data: unknown) => data);
   });
 
   describe('GET /api/ab-tests', () => {
@@ -168,9 +174,11 @@ describe('A/B Tests API Routes', () => {
     });
 
     it('should return 429 when rate limited', async () => {
-      vi.mocked(require('@/lib/rate-limit').apiRateLimiter.check).mockReturnValue({
+      vi.mocked(apiRateLimiter.check).mockReturnValue({
         success: false,
         resetAt: Date.now() + 60000,
+        remaining: 0,
+        current: 101,
       });
 
       const request = new NextRequest('http://localhost:3000/api/ab-tests');
@@ -244,10 +252,23 @@ describe('A/B Tests API Routes', () => {
       const data = await response.json();
 
       expect(response.status).toBe(404);
-      expect(data.error).toBe('Campaign not found');
+      expect(data.error.message).toBe('Campaign not found');
     });
 
     it('should return validation error for invalid data', async () => {
+      // Make schema parse throw a ZodError to simulate validation failure
+      vi.mocked(createABTestSchema.parse).mockImplementation(() => {
+        throw new ZodError([
+          {
+            code: 'invalid_type',
+            expected: 'string',
+            received: 'undefined',
+            path: ['campaignId'],
+            message: 'Campaign ID is required',
+          },
+        ]);
+      });
+
       const request = new NextRequest('http://localhost:3000/api/ab-tests', {
         method: 'POST',
         body: JSON.stringify({
@@ -287,7 +308,7 @@ describe('A/B Tests API Routes', () => {
       const data = await response.json();
 
       expect(response.status).toBe(409);
-      expect(data.error).toBe('Campaign already has an A/B test');
+      expect(data.error.message).toBe('Campaign already has an A/B test');
     });
 
     it('should return 400 for invalid JSON', async () => {
@@ -304,9 +325,11 @@ describe('A/B Tests API Routes', () => {
     });
 
     it('should return 429 when rate limited', async () => {
-      vi.mocked(require('@/lib/rate-limit').apiRateLimiter.check).mockReturnValue({
+      vi.mocked(apiRateLimiter.check).mockReturnValue({
         success: false,
         resetAt: Date.now() + 60000,
+        remaining: 0,
+        current: 101,
       });
 
       const request = new NextRequest('http://localhost:3000/api/ab-tests', {

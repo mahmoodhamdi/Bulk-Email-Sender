@@ -7,7 +7,8 @@ import {
   listEnrollments,
   enrollContactSchema,
 } from '@/lib/automation';
-import { withAuth, createErrorResponse, AuthContext } from '@/lib/auth';
+import { withAuth, AuthContext } from '@/lib/auth';
+import { apiError, ApiErrors, apiSuccess } from '@/lib/api-response';
 
 interface RouteParams {
   id: string;
@@ -35,7 +36,7 @@ async function validateAutomationOwnership(automationId: string, userId: string)
 export const GET = withAuth(async (request: NextRequest, context: AuthContext, params?: RouteParams) => {
   try {
     if (!params?.id) {
-      return createErrorResponse('ID is required', 400);
+      return apiError('VALIDATION_ERROR', 'ID is required', 400);
     }
     const { id } = params;
 
@@ -43,16 +44,13 @@ export const GET = withAuth(async (request: NextRequest, context: AuthContext, p
     const rateLimitResult = apiRateLimiter.check(`automations-enrollments-${context.userId}-${id}`);
     if (!rateLimitResult.success) {
       const retryAfter = Math.ceil((rateLimitResult.resetAt - Date.now()) / 1000);
-      return NextResponse.json(
-        { error: 'Too many requests', retryAfter },
-        { status: 429 }
-      );
+      return ApiErrors.rateLimited(retryAfter);
     }
 
     // Owner validation - check if automation belongs to the user
     const isOwner = await validateAutomationOwnership(id, context.userId);
     if (!isOwner) {
-      return createErrorResponse('Automation not found', 404);
+      return ApiErrors.notFound('Automation');
     }
 
     // Parse query parameters
@@ -78,10 +76,7 @@ export const GET = withAuth(async (request: NextRequest, context: AuthContext, p
     });
   } catch (error: unknown) {
     console.error('Error listing enrollments:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    return ApiErrors.internalError();
   }
 }, { requiredPermission: 'automations:read' });
 
@@ -93,7 +88,7 @@ export const GET = withAuth(async (request: NextRequest, context: AuthContext, p
 export const POST = withAuth(async (request: NextRequest, context: AuthContext, params?: RouteParams) => {
   try {
     if (!params?.id) {
-      return createErrorResponse('ID is required', 400);
+      return apiError('VALIDATION_ERROR', 'ID is required', 400);
     }
     const { id } = params;
 
@@ -101,16 +96,13 @@ export const POST = withAuth(async (request: NextRequest, context: AuthContext, 
     const rateLimitResult = apiRateLimiter.check(`automations-enroll-${context.userId}-${id}`);
     if (!rateLimitResult.success) {
       const retryAfter = Math.ceil((rateLimitResult.resetAt - Date.now()) / 1000);
-      return NextResponse.json(
-        { error: 'Too many requests', retryAfter },
-        { status: 429 }
-      );
+      return ApiErrors.rateLimited(retryAfter);
     }
 
     // Owner validation - check if automation belongs to the user
     const isOwner = await validateAutomationOwnership(id, context.userId);
     if (!isOwner) {
-      return createErrorResponse('Automation not found', 404);
+      return ApiErrors.notFound('Automation');
     }
 
     // Validate that the contact also belongs to the user
@@ -126,46 +118,35 @@ export const POST = withAuth(async (request: NextRequest, context: AuthContext, 
     });
 
     if (!contact) {
-      return createErrorResponse('Contact not found', 404);
+      return ApiErrors.notFound('Contact');
     }
 
     // Enroll contact
     const enrollment = await enrollContact(id, validated.contactId, validated.startStepId);
 
-    return NextResponse.json({ data: enrollment }, { status: 201 });
+    return apiSuccess(enrollment, 201);
   } catch (error: unknown) {
     if (error instanceof ZodError) {
-      return NextResponse.json(
-        { error: 'Validation error', details: error.errors },
-        { status: 400 }
-      );
+      return ApiErrors.validationError({ fields: error.errors });
     }
     if (error instanceof SyntaxError) {
-      return NextResponse.json(
-        { error: 'Invalid JSON body' },
-        { status: 400 }
-      );
+      return ApiErrors.invalidJson();
     }
     if (error instanceof Error) {
-      const errorMessages: Record<string, number> = {
-        'Automation not found': 404,
-        'Can only enroll contacts in active automations': 400,
-        'Contact is already enrolled in this automation': 409,
-        'Automation has no steps': 400,
-      };
-
-      const status = errorMessages[error.message];
-      if (status) {
-        return NextResponse.json(
-          { error: error.message },
-          { status }
-        );
+      if (error.message === 'Automation not found') {
+        return ApiErrors.notFound('Automation');
+      }
+      if (error.message === 'Contact is already enrolled in this automation') {
+        return ApiErrors.conflict(error.message);
+      }
+      if (
+        error.message === 'Can only enroll contacts in active automations' ||
+        error.message === 'Automation has no steps'
+      ) {
+        return ApiErrors.invalidOperation(error.message);
       }
     }
     console.error('Error enrolling contact:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    return ApiErrors.internalError();
   }
 }, { requiredPermission: 'automations:write' });

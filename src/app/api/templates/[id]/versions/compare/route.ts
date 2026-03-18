@@ -5,7 +5,8 @@ import { compareVersionsQuerySchema } from '@/lib/validations/template-version';
 import { apiRateLimiter } from '@/lib/rate-limit';
 import { compareVersions } from '@/lib/template';
 import { ZodError } from 'zod';
-import { withAuth, createErrorResponse, AuthContext } from '@/lib/auth';
+import { withAuth, AuthContext } from '@/lib/auth';
+import { apiError } from '@/lib/api-response';
 
 interface RouteParams {
   id: string;
@@ -33,7 +34,7 @@ async function validateTemplateOwnership(templateId: string, userId: string): Pr
 export const GET = withAuth(async (request: NextRequest, context: AuthContext, params?: RouteParams) => {
   try {
     if (!params?.id) {
-      return createErrorResponse('Template ID is required', 400);
+      return apiError('VALIDATION_ERROR', 'Template ID is required', 400);
     }
     const { id } = params;
 
@@ -53,7 +54,7 @@ export const GET = withAuth(async (request: NextRequest, context: AuthContext, p
     // Owner validation - check if template belongs to the user
     const isOwner = await validateTemplateOwnership(id, context.userId);
     if (!isOwner) {
-      return createErrorResponse('Template not found', 404);
+      return apiError('NOT_FOUND', 'Template not found', 404);
     }
 
     // Parse and validate query parameters
@@ -76,7 +77,7 @@ export const GET = withAuth(async (request: NextRequest, context: AuthContext, p
     const comparison = await compareVersions(id, validated.v1, validated.v2);
 
     if (!comparison) {
-      return createErrorResponse('One or both versions not found', 404);
+      return apiError('NOT_FOUND', 'One or both versions not found', 404);
     }
 
     return NextResponse.json({ data: comparison });

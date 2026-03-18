@@ -54,10 +54,13 @@ import {
   updateVariant,
   removeVariant,
 } from '@/lib/ab-test';
+import { apiRateLimiter } from '@/lib/rate-limit';
 
 describe('A/B Tests By ID API Routes', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // Restore default rate limiter behavior after each clear
+    vi.mocked(apiRateLimiter.check).mockReturnValue({ success: true, resetAt: Date.now() + 60000 });
   });
 
   describe('GET /api/ab-tests/[id]', () => {
@@ -112,7 +115,7 @@ describe('A/B Tests By ID API Routes', () => {
       const data = await response.json();
 
       expect(response.status).toBe(404);
-      expect(data.error).toBe('A/B test not found');
+      expect(data.error.message).toBe('A/B test not found');
       expect(getABTest).not.toHaveBeenCalled();
     });
 
@@ -127,13 +130,15 @@ describe('A/B Tests By ID API Routes', () => {
       const data = await response.json();
 
       expect(response.status).toBe(404);
-      expect(data.error).toBe('A/B test not found');
+      expect(data.error.message).toBe('A/B test not found');
     });
 
     it('should return 429 when rate limited', async () => {
-      vi.mocked(require('@/lib/rate-limit').apiRateLimiter.check).mockReturnValue({
+      vi.mocked(apiRateLimiter.check).mockReturnValue({
         success: false,
         resetAt: Date.now() + 60000,
+        remaining: 0,
+        current: 101,
       });
 
       const request = new NextRequest('http://localhost:3000/api/ab-tests/test-clxxxxxxxxxxxxxxxxxx');
@@ -364,7 +369,7 @@ describe('A/B Tests By ID API Routes', () => {
       const data = await response.json();
 
       expect(response.status).toBe(404);
-      expect(data.error).toBe('A/B test not found');
+      expect(data.error.message).toBe('A/B test not found');
     });
 
     it('should handle service errors with appropriate status codes', async () => {
@@ -418,7 +423,7 @@ describe('A/B Tests By ID API Routes', () => {
       const data = await response.json();
 
       expect(response.status).toBe(404);
-      expect(data.error).toBe('A/B test not found');
+      expect(data.error.message).toBe('A/B test not found');
       expect(deleteABTest).not.toHaveBeenCalled();
     });
 
@@ -436,13 +441,15 @@ describe('A/B Tests By ID API Routes', () => {
       const data = await response.json();
 
       expect(response.status).toBe(404);
-      expect(data.error).toBe('A/B test not found');
+      expect(data.error.message).toBe('A/B test not found');
     });
 
     it('should return 429 when rate limited', async () => {
-      vi.mocked(require('@/lib/rate-limit').apiRateLimiter.check).mockReturnValue({
+      vi.mocked(apiRateLimiter.check).mockReturnValue({
         success: false,
         resetAt: Date.now() + 60000,
+        remaining: 0,
+        current: 101,
       });
 
       const request = new NextRequest('http://localhost:3000/api/ab-tests/test-clxxxxxxxxxxxxxxxxxx', {

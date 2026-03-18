@@ -40,10 +40,13 @@ import {
   cancelCampaign,
   retryFailedRecipients,
 } from '@/lib/queue';
+import { apiRateLimiter } from '@/lib/rate-limit';
 
 describe('Campaign Send API Routes', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // Restore default rate limiter behavior after each clear
+    vi.mocked(apiRateLimiter.check).mockReturnValue({ success: true, resetAt: Date.now() + 60000 });
   });
 
   describe('POST /api/campaigns/[id]/send', () => {
@@ -64,7 +67,7 @@ describe('Campaign Send API Routes', () => {
       const request = new NextRequest('http://localhost:3000/api/campaigns/clxxxxxxxxxxxxxxxxxx/send', {
         method: 'POST',
         body: JSON.stringify({
-          priority: 'normal',
+          priority: 'NORMAL',
           batchSize: 50,
           delayBetweenBatches: 1000,
         }),
@@ -80,7 +83,7 @@ describe('Campaign Send API Routes', () => {
       expect(queueCampaign).toHaveBeenCalledWith(
         campaignId,
         expect.objectContaining({
-          priority: 'normal',
+          priority: 'NORMAL',
           batchSize: 50,
           delayBetweenBatches: 1000,
         })
@@ -132,14 +135,14 @@ describe('Campaign Send API Routes', () => {
 
       const request = new NextRequest('http://localhost:3000/api/campaigns/clxxxxxxxxxxxxxxxxxx/send', {
         method: 'POST',
-        body: JSON.stringify({ priority: 'normal' }),
+        body: JSON.stringify({ priority: 'NORMAL' }),
       });
 
       const response = await POST(request, { params: Promise.resolve({ id: 'clxxxxxxxxxxxxxxxxxx' }) });
       const data = await response.json();
 
       expect(response.status).toBe(404);
-      expect(data.error).toBe('Campaign not found');
+      expect(data.error.message).toBe('Campaign not found');
     });
 
     it('should return 400 when campaign has no recipients', async () => {
@@ -153,14 +156,14 @@ describe('Campaign Send API Routes', () => {
 
       const request = new NextRequest('http://localhost:3000/api/campaigns/clxxxxxxxxxxxxxxxxxx/send', {
         method: 'POST',
-        body: JSON.stringify({ priority: 'normal' }),
+        body: JSON.stringify({ priority: 'NORMAL' }),
       });
 
       const response = await POST(request, { params: Promise.resolve({ id: 'clxxxxxxxxxxxxxxxxxx' }) });
       const data = await response.json();
 
       expect(response.status).toBe(400);
-      expect(data.error).toBe('Campaign has no recipients');
+      expect(data.error.message).toBe('Campaign has no recipients');
     });
 
     it('should return 400 when scheduled time is in the past', async () => {
@@ -184,7 +187,7 @@ describe('Campaign Send API Routes', () => {
       const data = await response.json();
 
       expect(response.status).toBe(400);
-      expect(data.error).toBe('Scheduled time must be in the future');
+      expect(data.error.message).toBe('Scheduled time must be in the future');
     });
 
     it('should return 400 when campaign is not in DRAFT or SCHEDULED status', async () => {
@@ -198,7 +201,7 @@ describe('Campaign Send API Routes', () => {
 
       const request = new NextRequest('http://localhost:3000/api/campaigns/clxxxxxxxxxxxxxxxxxx/send', {
         method: 'POST',
-        body: JSON.stringify({ priority: 'normal' }),
+        body: JSON.stringify({ priority: 'NORMAL' }),
       });
 
       const response = await POST(request, { params: Promise.resolve({ id: 'clxxxxxxxxxxxxxxxxxx' }) });
@@ -211,25 +214,27 @@ describe('Campaign Send API Routes', () => {
     it('should return 400 for invalid campaign ID', async () => {
       const request = new NextRequest('http://localhost:3000/api/campaigns/short/send', {
         method: 'POST',
-        body: JSON.stringify({ priority: 'normal' }),
+        body: JSON.stringify({ priority: 'NORMAL' }),
       });
 
       const response = await POST(request, { params: Promise.resolve({ id: 'short' }) });
       const data = await response.json();
 
       expect(response.status).toBe(400);
-      expect(data.error).toBe('Invalid campaign ID');
+      expect(data.error.message).toBe('Invalid campaign ID');
     });
 
     it('should return 429 when rate limited', async () => {
-      vi.mocked(require('@/lib/rate-limit').apiRateLimiter.check).mockReturnValue({
+      vi.mocked(apiRateLimiter.check).mockReturnValue({
         success: false,
         resetAt: Date.now() + 60000,
+        remaining: 0,
+        current: 101,
       });
 
       const request = new NextRequest('http://localhost:3000/api/campaigns/clxxxxxxxxxxxxxxxxxx/send', {
         method: 'POST',
-        body: JSON.stringify({ priority: 'normal' }),
+        body: JSON.stringify({ priority: 'NORMAL' }),
       });
 
       const response = await POST(request, { params: Promise.resolve({ id: 'clxxxxxxxxxxxxxxxxxx' }) });
@@ -373,7 +378,7 @@ describe('Campaign Send API Routes', () => {
       const data = await response.json();
 
       expect(response.status).toBe(400);
-      expect(data.error).toContain('Can only pause a sending campaign');
+      expect(data.error.message).toContain('Can only pause a sending campaign');
     });
 
     it('should return 400 when trying to resume non-paused campaign', async () => {
@@ -393,7 +398,7 @@ describe('Campaign Send API Routes', () => {
       const data = await response.json();
 
       expect(response.status).toBe(400);
-      expect(data.error).toContain('Can only resume a paused campaign');
+      expect(data.error.message).toContain('Can only resume a paused campaign');
     });
 
     it('should return 404 when campaign not found', async () => {
@@ -408,10 +413,12 @@ describe('Campaign Send API Routes', () => {
       const data = await response.json();
 
       expect(response.status).toBe(404);
-      expect(data.error).toBe('Campaign not found');
+      expect(data.error.message).toBe('Campaign not found');
     });
 
     it('should return 400 for invalid action', async () => {
+      // The queueActionSchema validates the action field against an enum.
+      // Sending an unrecognized action value causes Zod to return a validation error.
       const mockCampaign = {
         id: 'clxxxxxxxxxxxxxxxxxx',
         status: 'SENDING',
@@ -428,7 +435,7 @@ describe('Campaign Send API Routes', () => {
       const data = await response.json();
 
       expect(response.status).toBe(400);
-      expect(data.error).toBe('Invalid action');
+      expect(data.error).toBe('Validation error');
     });
 
     it('should return 400 for validation errors', async () => {

@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
 import { apiRateLimiter } from '@/lib/rate-limit';
 import { sendCampaignSchema, queueActionSchema } from '@/lib/validations/queue';
-import { withAuth, createErrorResponse, AuthContext } from '@/lib/auth';
+import { withAuth, AuthContext } from '@/lib/auth';
+import { apiError, ApiErrors, apiSuccess } from '@/lib/api-response';
 import {
   queueCampaign,
   pauseCampaign,
@@ -22,7 +23,7 @@ interface RouteParams {
 export const POST = withAuth(async (request: NextRequest, context: AuthContext, params?: RouteParams) => {
   try {
     if (!params?.id) {
-      return createErrorResponse('Campaign ID is required', 400);
+      return apiError('VALIDATION_ERROR', 'Campaign ID is required', 400);
     }
 
     const { id: campaignId } = params;
@@ -38,7 +39,7 @@ export const POST = withAuth(async (request: NextRequest, context: AuthContext, 
 
     // Validate campaign ID
     if (!campaignId || campaignId.length < 20) {
-      return createErrorResponse('Invalid campaign ID', 400);
+      return apiError('VALIDATION_ERROR', 'Invalid campaign ID', 400);
     }
 
     // Parse and validate request body
@@ -72,7 +73,7 @@ export const POST = withAuth(async (request: NextRequest, context: AuthContext, 
     });
 
     if (!campaign) {
-      return createErrorResponse('Campaign not found', 404);
+      return apiError('NOT_FOUND', 'Campaign not found', 404);
     }
 
     // Validate campaign status
@@ -88,14 +89,14 @@ export const POST = withAuth(async (request: NextRequest, context: AuthContext, 
 
     // Check for recipients
     if (campaign._count.recipients === 0) {
-      return createErrorResponse('Campaign has no recipients', 400);
+      return apiError('VALIDATION_ERROR', 'Campaign has no recipients', 400);
     }
 
     // Handle scheduled sending
     if (scheduledAt) {
       const scheduledDate = new Date(scheduledAt);
       if (scheduledDate <= new Date()) {
-        return createErrorResponse('Scheduled time must be in the future', 400);
+        return apiError('VALIDATION_ERROR', 'Scheduled time must be in the future', 400);
       }
 
       await prisma.campaign.update({
@@ -151,7 +152,7 @@ export const POST = withAuth(async (request: NextRequest, context: AuthContext, 
 export const PATCH = withAuth(async (request: NextRequest, context: AuthContext, params?: RouteParams) => {
   try {
     if (!params?.id) {
-      return createErrorResponse('Campaign ID is required', 400);
+      return apiError('VALIDATION_ERROR', 'Campaign ID is required', 400);
     }
 
     const { id: campaignId } = params;
@@ -167,7 +168,7 @@ export const PATCH = withAuth(async (request: NextRequest, context: AuthContext,
 
     // Validate campaign ID
     if (!campaignId || campaignId.length < 20) {
-      return createErrorResponse('Invalid campaign ID', 400);
+      return apiError('VALIDATION_ERROR', 'Invalid campaign ID', 400);
     }
 
     // Parse and validate request body
@@ -196,14 +197,14 @@ export const PATCH = withAuth(async (request: NextRequest, context: AuthContext,
     });
 
     if (!campaign) {
-      return createErrorResponse('Campaign not found', 404);
+      return apiError('NOT_FOUND', 'Campaign not found', 404);
     }
 
     // Handle action
     switch (action) {
       case 'pause': {
         if (campaign.status !== 'SENDING') {
-          return createErrorResponse('Can only pause a sending campaign', 400);
+          return apiError('VALIDATION_ERROR', 'Can only pause a sending campaign', 400);
         }
         const paused = await pauseCampaign(campaignId);
         return NextResponse.json({
@@ -214,7 +215,7 @@ export const PATCH = withAuth(async (request: NextRequest, context: AuthContext,
 
       case 'resume': {
         if (campaign.status !== 'PAUSED') {
-          return createErrorResponse('Can only resume a paused campaign', 400);
+          return apiError('VALIDATION_ERROR', 'Can only resume a paused campaign', 400);
         }
         const resumed = await resumeCampaign(campaignId);
         return NextResponse.json({
@@ -225,7 +226,7 @@ export const PATCH = withAuth(async (request: NextRequest, context: AuthContext,
 
       case 'cancel': {
         if (!['SENDING', 'PAUSED', 'SCHEDULED'].includes(campaign.status)) {
-          return createErrorResponse('Can only cancel a sending, paused, or scheduled campaign', 400);
+          return apiError('VALIDATION_ERROR', 'Can only cancel a sending, paused, or scheduled campaign', 400);
         }
         const result = await cancelCampaign(campaignId);
         return NextResponse.json({
@@ -239,7 +240,7 @@ export const PATCH = withAuth(async (request: NextRequest, context: AuthContext,
 
       case 'retry': {
         if (campaign.status !== 'COMPLETED' && campaign.status !== 'SENDING') {
-          return createErrorResponse('Can only retry failed recipients for completed or sending campaigns', 400);
+          return apiError('VALIDATION_ERROR', 'Can only retry failed recipients for completed or sending campaigns', 400);
         }
         const result = await retryFailedRecipients(campaignId);
         return NextResponse.json({
@@ -252,7 +253,7 @@ export const PATCH = withAuth(async (request: NextRequest, context: AuthContext,
       }
 
       default:
-        return createErrorResponse('Invalid action', 400);
+        return apiError('VALIDATION_ERROR', 'Invalid action', 400);
     }
   } catch (error: unknown) {
     console.error('Campaign action error:', error);

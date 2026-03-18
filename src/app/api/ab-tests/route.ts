@@ -7,7 +7,8 @@ import {
   listABTests,
   createABTestSchema,
 } from '@/lib/ab-test';
-import { withAuth, createErrorResponse, AuthContext } from '@/lib/auth';
+import { withAuth, AuthContext } from '@/lib/auth';
+import { apiError, ApiErrors } from '@/lib/api-response';
 
 /**
  * GET /api/ab-tests
@@ -51,10 +52,7 @@ export const GET = withAuth(async (request: NextRequest, context: AuthContext) =
     });
   } catch (error: unknown) {
     console.error('Error listing A/B tests:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    return ApiErrors.internalError();
   }
 }, { requiredPermission: 'ab-tests:read' });
 
@@ -89,7 +87,7 @@ export const POST = withAuth(async (request: NextRequest, context: AuthContext) 
     });
 
     if (!campaign) {
-      return createErrorResponse('Campaign not found', 404);
+      return ApiErrors.notFound('Campaign');
     }
 
     // Create A/B test - associate with authenticated user
@@ -111,22 +109,13 @@ export const POST = withAuth(async (request: NextRequest, context: AuthContext) 
     }
     if (error instanceof Error) {
       if (error.message === 'Campaign not found') {
-        return NextResponse.json(
-          { error: 'Campaign not found' },
-          { status: 404 }
-        );
+        return apiError('NOT_FOUND', 'Campaign not found', 404);
       }
       if (error.message === 'Campaign already has an A/B test') {
-        return NextResponse.json(
-          { error: 'Campaign already has an A/B test' },
-          { status: 409 }
-        );
+        return apiError('CONFLICT', 'Campaign already has an A/B test', 409);
       }
     }
     console.error('Error creating A/B test:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    return ApiErrors.internalError();
   }
 }, { requiredPermission: 'ab-tests:write' });

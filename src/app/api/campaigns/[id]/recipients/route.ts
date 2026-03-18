@@ -3,7 +3,8 @@ import { prisma } from '@/lib/db/prisma';
 import { campaignIdSchema, addRecipientsSchema } from '@/lib/validations/campaign';
 import { apiRateLimiter } from '@/lib/rate-limit';
 import { generateShortId } from '@/lib/crypto';
-import { withAuth, createErrorResponse, AuthContext } from '@/lib/auth';
+import { withAuth, AuthContext } from '@/lib/auth';
+import { apiError, ApiErrors } from '@/lib/api-response';
 import { ZodError, z } from 'zod';
 
 interface RouteParams {
@@ -35,7 +36,7 @@ const recipientQuerySchema = z.object({
 export const GET = withAuth(async (request: NextRequest, context: AuthContext, params?: RouteParams) => {
   try {
     if (!params?.id) {
-      return createErrorResponse('Campaign ID is required', 400);
+      return apiError('VALIDATION_ERROR', 'Campaign ID is required', 400);
     }
 
     const { id } = params;
@@ -63,7 +64,7 @@ export const GET = withAuth(async (request: NextRequest, context: AuthContext, p
     });
 
     if (!campaign) {
-      return createErrorResponse('Campaign not found', 404);
+      return ApiErrors.notFound('Campaign');
     }
 
     // Parse query parameters
@@ -169,10 +170,7 @@ export const GET = withAuth(async (request: NextRequest, context: AuthContext, p
       );
     }
     console.error('Error listing recipients:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    return ApiErrors.internalError();
   }
 }, { requiredPermission: 'campaigns:read' });
 
@@ -190,7 +188,7 @@ export const GET = withAuth(async (request: NextRequest, context: AuthContext, p
 export const POST = withAuth(async (request: NextRequest, context: AuthContext, params?: RouteParams) => {
   try {
     if (!params?.id) {
-      return createErrorResponse('Campaign ID is required', 400);
+      return apiError('VALIDATION_ERROR', 'Campaign ID is required', 400);
     }
 
     const { id } = params;
@@ -218,11 +216,11 @@ export const POST = withAuth(async (request: NextRequest, context: AuthContext, 
     });
 
     if (!campaign) {
-      return createErrorResponse('Campaign not found', 404);
+      return ApiErrors.notFound('Campaign');
     }
 
     if (campaign.status !== 'DRAFT' && campaign.status !== 'SCHEDULED') {
-      return createErrorResponse('Can only add recipients to draft or scheduled campaigns', 400);
+      return apiError('VALIDATION_ERROR', 'Can only add recipients to draft or scheduled campaigns', 400);
     }
 
     // Parse and validate body
@@ -318,9 +316,6 @@ export const POST = withAuth(async (request: NextRequest, context: AuthContext, 
       );
     }
     console.error('Error adding recipients:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    return ApiErrors.internalError();
   }
 }, { requiredPermission: 'campaigns:write' });

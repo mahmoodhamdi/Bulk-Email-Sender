@@ -3,8 +3,9 @@ import { prisma } from '@/lib/db/prisma';
 import { updateCampaignSchema, campaignIdSchema } from '@/lib/validations/campaign';
 import { apiRateLimiter } from '@/lib/rate-limit';
 import { sanitizeEmailHtml } from '@/lib/sanitize-server';
-import { withAuth, createErrorResponse, AuthContext } from '@/lib/auth';
+import { withAuth, AuthContext } from '@/lib/auth';
 import { ZodError } from 'zod';
+import { apiError, ApiErrors, apiSuccess } from '@/lib/api-response';
 
 interface RouteParams {
   id: string;
@@ -18,7 +19,7 @@ interface RouteParams {
 export const GET = withAuth(async (request: NextRequest, context: AuthContext, params?: RouteParams) => {
   try {
     if (!params?.id) {
-      return createErrorResponse('Campaign ID is required', 400);
+      return apiError('VALIDATION_ERROR', 'Campaign ID is required', 400);
     }
     const { id } = params;
 
@@ -64,7 +65,7 @@ export const GET = withAuth(async (request: NextRequest, context: AuthContext, p
     });
 
     if (!campaign) {
-      return createErrorResponse('Campaign not found', 404);
+      return apiError('NOT_FOUND', 'Campaign not found', 404);
     }
 
     return NextResponse.json({ data: campaign });
@@ -91,7 +92,7 @@ export const GET = withAuth(async (request: NextRequest, context: AuthContext, p
 export const PUT = withAuth(async (request: NextRequest, context: AuthContext, params?: RouteParams) => {
   try {
     if (!params?.id) {
-      return createErrorResponse('Campaign ID is required', 400);
+      return apiError('VALIDATION_ERROR', 'Campaign ID is required', 400);
     }
     const { id } = params;
 
@@ -118,7 +119,7 @@ export const PUT = withAuth(async (request: NextRequest, context: AuthContext, p
     });
 
     if (!existing) {
-      return createErrorResponse('Campaign not found', 404);
+      return apiError('NOT_FOUND', 'Campaign not found', 404);
     }
 
     // Don't allow updating campaigns that are sending or completed
@@ -192,7 +193,7 @@ export const PUT = withAuth(async (request: NextRequest, context: AuthContext, p
 export const DELETE = withAuth(async (request: NextRequest, context: AuthContext, params?: RouteParams) => {
   try {
     if (!params?.id) {
-      return createErrorResponse('Campaign ID is required', 400);
+      return apiError('VALIDATION_ERROR', 'Campaign ID is required', 400);
     }
     const { id } = params;
 
@@ -219,7 +220,7 @@ export const DELETE = withAuth(async (request: NextRequest, context: AuthContext
     });
 
     if (!existing) {
-      return createErrorResponse('Campaign not found', 404);
+      return apiError('NOT_FOUND', 'Campaign not found', 404);
     }
 
     // Don't allow deleting campaigns that are currently sending
