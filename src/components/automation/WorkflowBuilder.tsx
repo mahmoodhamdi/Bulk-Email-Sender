@@ -114,8 +114,7 @@ function TriggerNode() {
 // Step node component
 function StepNode({ step, isSelected }: { step: AutomationStep; isSelected: boolean }) {
   const t = useTranslations('automation');
-  const { selectStep, deleteStep, updateStep } = useAutomationStore();
-  const [showConfig, setShowConfig] = useState(false);
+  const { selectStep, deleteStep } = useAutomationStore();
 
   const stepIcons: Record<StepType, React.ReactNode> = {
     email: (

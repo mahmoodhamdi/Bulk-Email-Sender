@@ -139,7 +139,7 @@ export function CampaignTable({
   // Generate mock trend data for sparkline
   const generateTrendData = (campaign: CampaignMetrics) => {
     const base = campaign.opened;
-    return Array.from({ length: 7 }, (_, i) =>
+    return Array.from({ length: 7 }, () =>
       Math.max(0, base + Math.floor(Math.random() * base * 0.5) - base * 0.25)
     );
   };

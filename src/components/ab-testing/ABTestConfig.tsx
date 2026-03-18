@@ -19,7 +19,7 @@ interface ABTestConfigProps {
   onComplete?: () => void;
 }
 
-export function ABTestConfig({ campaignId, onComplete }: ABTestConfigProps) {
+export function ABTestConfig({ campaignId, onComplete: _onComplete }: ABTestConfigProps) {
   const t = useTranslations();
   const {
     currentTest,

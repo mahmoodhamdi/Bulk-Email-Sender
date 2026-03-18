@@ -20,7 +20,7 @@ export default function SegmentsPage() {
     setMode('create');
   };
 
-  const handleEdit = (segmentId: string) => {
+  const handleEdit = (_segmentId: string) => {
     setMode('edit');
   };
 

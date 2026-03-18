@@ -5,7 +5,7 @@ import { useTranslations } from 'next-intl';
 import { Trophy, TrendingUp, Mail, MousePointer, Target, Crown, Clock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { useABTestStore, type ABVariant } from '@/stores/ab-test-store';
+import { useABTestStore } from '@/stores/ab-test-store';
 import { cn } from '@/lib/utils';
 
 interface ABTestResultsProps {

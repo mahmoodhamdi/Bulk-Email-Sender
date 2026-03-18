@@ -15,7 +15,6 @@ type TabType = 'overview' | 'deliverability' | 'domain' | 'blacklist' | 'recomme
 
 export default function ReputationPage() {
   const t = useTranslations('reputation');
-  const tNav = useTranslations('nav');
   const [activeTab, setActiveTab] = useState<TabType>('overview');
 
   const tabs: { id: TabType; label: string }[] = [

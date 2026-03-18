@@ -234,7 +234,7 @@ export function SimpleDonutChart({
   centerValue,
   className,
 }: DonutChartProps) {
-  const { segments, total } = useMemo(() => {
+  const { segments } = useMemo(() => {
     const tot = data.reduce((sum, d) => sum + d.value, 0);
 
     const segs = data.reduce<Array<{
@@ -418,4 +418,5 @@ export function Sparkline({
   );
 }
 
-export default { SimpleLineChart, SimpleBarChart, SimpleDonutChart, ProgressBar, Sparkline };
+const ChartsExport = { SimpleLineChart, SimpleBarChart, SimpleDonutChart, ProgressBar, Sparkline };
+export default ChartsExport;
