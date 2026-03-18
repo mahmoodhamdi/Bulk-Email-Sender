@@ -64,3 +64,6 @@ firebase-service-account.json
 # Docker generated files
 docker/.ports
 docker/.env
+
+# Audit files (internal QA)
+.audit/

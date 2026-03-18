@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Bulk Email Sender - A production-ready web application for mass email sending with templates, personalization, scheduling, and analytics. Built with Next.js 16 (App Router), TypeScript (strict mode), and Tailwind CSS.
+Bulk Email Sender - A production-ready web application for mass email sending with templates, personalization, scheduling, and analytics. Built with Next.js 16 (App Router), React 19, TypeScript (strict mode), and Tailwind CSS v4.
 
 ## Common Commands
 
@@ -49,6 +49,9 @@ npm install --legacy-peer-deps
 ### Path Aliases
 Use `@/*` to import from `src/*` (e.g., `import { cn } from '@/lib/utils'`)
 
+### Tailwind CSS v4
+Uses CSS-based configuration (no `tailwind.config.js`). Tailwind is configured via `@tailwindcss/postcss` plugin.
+
 ### Key Directories
 - `src/app/` - Next.js App Router pages and API routes
   - `src/app/[locale]/` - Locale-based pages (i18n with EN/AR and RTL support)
@@ -67,6 +70,10 @@ Key models: User, Campaign, Template, TemplateVersion, Contact, ContactList, Rec
 
 Key enums: UserRole (USER/ADMIN/SUPER_ADMIN), CampaignStatus (DRAFT/SCHEDULED/SENDING/PAUSED/COMPLETED/CANCELLED), SubscriptionTier (FREE/STARTER/PRO/ENTERPRISE), PaymentProvider (STRIPE/PAYMOB/PAYTABS/PADDLE), EventType (SENT/DELIVERED/OPENED/CLICKED/BOUNCED/UNSUBSCRIBED/COMPLAINED).
 
+### i18n (`src/i18n/`)
+
+next-intl with `localePrefix: 'as-needed'` — the default locale (EN) has no URL prefix, AR routes use `/ar/`. Config at `src/i18n/config.ts`, routing at `src/i18n/routing.ts`, request handler at `src/i18n/request.ts`. Translation files in `src/messages/` (en.json, ar.json). Use `isRtl(locale)` for RTL detection.
+
 ### Middleware (`src/middleware.ts`)
 
 - CSRF protection for mutating API routes (double-submit cookie pattern, validates `X-CSRF-Token` header)
@@ -78,7 +85,7 @@ Key enums: UserRole (USER/ADMIN/SUPER_ADMIN), CampaignStatus (DRAFT/SCHEDULED/SE
 
 ### Authentication (`src/lib/auth/`)
 
-NextAuth.js v5 with Email/Password, Firebase Auth, Google OAuth, GitHub OAuth, and API Keys (prefix: `bes_`).
+NextAuth.js v5 (beta 30) with Email/Password, Firebase Auth, Google OAuth, GitHub OAuth, and API Keys (prefix: `bes_`). JWT sessions with 30-day maxAge.
 
 ```typescript
 import { auth, isAdmin, withAuth } from '@/lib/auth';
@@ -130,6 +137,7 @@ Error codes: `UNAUTHORIZED`, `FORBIDDEN`, `VALIDATION_ERROR`, `INVALID_INPUT`, `
 
 - `sender.ts` - Nodemailer SMTP integration via `createEmailSender()`. Presets: gmail, outlook, yahoo, sendgrid, mailgun, ses, zoho
 - `merge-tags.ts` - Variables: `{{firstName}}`, `{{lastName}}`, `{{email}}`, `{{company}}`, `{{customField1}}`, `{{customField2}}`, `{{unsubscribeLink}}`, `{{date}}`
+- Email builder uses Tiptap rich text editor (`@tiptap/react` with extensions for color, image, link, text-align, underline)
 
 ### Queue System (`src/lib/queue/`)
 
@@ -236,7 +244,7 @@ See `.env.example` for complete list.
 
 ## Validation
 
-Use Zod schemas from `src/lib/validations/` for API input validation. Available schemas: `auth.ts`, `campaign.ts`, `contact.ts`, `template.ts`, `payment.ts`, `fcm.ts`, `tracking.ts`, `queue.ts`. Schemas follow the pattern `{resource}Schema`.
+Use Zod schemas from `src/lib/validations/` for API input validation. Available schemas: `auth.ts`, `campaign.ts`, `contact.ts`, `template.ts`, `template-version.ts`, `payment.ts`, `fcm.ts`, `tracking.ts`, `queue.ts`. Schemas follow the pattern `{resource}Schema`.
 
 ## Next.js Config
 
